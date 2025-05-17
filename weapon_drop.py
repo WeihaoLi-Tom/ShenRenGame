@@ -42,20 +42,22 @@ class WeaponDrop:
         rot_rect = rotated_img.get_rect(center=(self.pos[0] - camera_x, self.pos[1] - camera_y + self.hover_offset))
         surface.blit(rotated_img, rot_rect)
         
-    def draw_pickup_prompt(self, surface, camera_x, camera_y, player_pos):
+    def draw_pickup_prompt(self, surface, camera_x, camera_y, player_pos, font):
         # 检查玩家是否靠近武器，显示拾取提示
         pickup_distance = 50
         px, py = player_pos
         wx, wy = self.pos
         if ((px - wx) ** 2 + (py - wy) ** 2) ** 0.5 < pickup_distance:
-            # 绘制提示文本
-            pickup_font = pygame.font.Font(None, 20)
-            pickup_text = pickup_font.render("Press F to Pick Up !", True, (255, 255, 255))
+            # 用传入的小号font渲染中文
+            small_font = pygame.font.Font(font.get_name(), 8) if hasattr(font, 'get_name') else font
+            pickup_text = small_font.render("按F拾取耄耋之剑！", True, (255, 255, 255))
+            scale = 0.7  # 比如70%
+            pickup_text = pygame.transform.smoothscale(pickup_text, (int(pickup_text.get_width()*scale), int(pickup_text.get_height()*scale)))
             text_x = wx - camera_x - pickup_text.get_width() // 2
-            text_y = wy - camera_y - 40
+            text_y = wy - camera_y - 28  # 适当上移
             
-            # 添加文字背景
-            text_bg = pygame.Surface((pickup_text.get_width() + 10, pickup_text.get_height() + 6), pygame.SRCALPHA)
-            pygame.draw.rect(text_bg, (0, 0, 0, 150), text_bg.get_rect(), 0, 3)
-            surface.blit(text_bg, (text_x - 5, text_y - 3))
+            # 更紧凑的文字背景
+            text_bg = pygame.Surface((pickup_text.get_width() + 4, pickup_text.get_height() + 2), pygame.SRCALPHA)
+            pygame.draw.rect(text_bg, (0, 0, 0, 160), text_bg.get_rect(), 0, 2)
+            surface.blit(text_bg, (text_x - 2, text_y - 1))
             surface.blit(pickup_text, (text_x, text_y)) 

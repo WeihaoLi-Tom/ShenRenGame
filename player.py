@@ -17,7 +17,7 @@ class Player:
         self.attack_cooldown = 1  # 攻击冷却时间（秒）
         self.attack_last_time = 0
         self.attack_range = self.tile_width  # 攻击范围
-        self.attack_damage = 15
+        self.attack_damage = 100
         self.facing = "right"  # 玩家朝向，用于决定攻击方向
         # 添加剑的攻击判定区域
         self.attack_rect = pygame.Rect(0, 0, 0, 0)

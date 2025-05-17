@@ -1,6 +1,7 @@
 import pygame
 import time
 import math
+import os
 
 class UIManager:
     def __init__(self, window_width, window_height):
@@ -10,12 +11,19 @@ class UIManager:
         self.fps_timer = time.time()
         self.fps_counter = 0
         
-        # 初始化字体
+        # 优先加载项目内的中文字体
         try:
+            project_font_path = "assets/fonts/chinese.ttf"
+            if os.path.exists(project_font_path):
+                self.font = pygame.font.Font(project_font_path, 24)
+                print(f"成功加载项目字体: {project_font_path}")
+            else:
+                self.font = pygame.font.Font(None, 24)
+                print("警告: 未能加载中文字体，将使用默认字体")
+        except Exception as e:
+            print(f"加载字体时出错: {e}")
             self.font = pygame.font.Font(None, 24)
-        except:
-            self.font = pygame.font.SysFont('arial', 24)
-            
+        
         # Boss警告相关
         self.boss_warning_img = None
         self.boss_warning_timer = 0
@@ -25,7 +33,7 @@ class UIManager:
             self.boss_warning_img = pygame.image.load("assets/title/Bosswarning.png").convert_alpha()
         except Exception as e:
             print(f"Boss提示图片加载失败: {e}")
-            
+        
     def draw_fps(self, surface):
         self.fps_counter += 1
         if time.time() - self.fps_timer >= 1:
@@ -37,18 +45,18 @@ class UIManager:
         
     def draw_debug_info(self, surface, player_pos, zoom_level, show_collision, fps, game_state):
         debug_text = [
-            f"Pos: {player_pos}",
-            f"Zoom: {zoom_level:.1f}x",
-            f"Collision: {'ON' if show_collision else 'OFF'}",
+            f"位置: {player_pos}",
+            f"缩放: {zoom_level:.1f}x",
+            f"碰撞: {'开启' if show_collision else '关闭'}",
             f"FPS: {fps}",
-            f"State: {game_state}"
+            f"状态: {game_state}"
         ]
         for i, text in enumerate(debug_text):
             text_surface = self.font.render(text, True, (255, 255, 255))
             surface.blit(text_surface, (10, 10 + i * 25))
-            
+        
     def draw_pause_screen(self, surface):
-        pause_text = self.font.render("Game Pause - press ESC continue", True, (255, 255, 255))
+        pause_text = self.font.render("游戏暂停 - 按ESC继续", True, (255, 255, 255))
         text_rect = pause_text.get_rect(center=(self.window_width/2, self.window_height/2))
         surface.blit(pause_text, text_rect)
         
@@ -71,6 +79,6 @@ class UIManager:
                     surface.blit(scaled_img, img_rect)
             else:
                 self.boss_warning_timer = 0
-                
+        
     def trigger_boss_warning(self):
         self.boss_warning_timer = time.time() 

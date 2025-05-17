@@ -8,6 +8,7 @@ from effects import EffectManager
 from weapon_drop import WeaponDrop
 from game_state import GameState, GameStateManager
 from ui_manager import UIManager
+from audio_manager import AudioManager
 
 # 初始化
 pygame.init()
@@ -43,6 +44,7 @@ enemy_manager = EnemyManager(map_manager, player)
 effect_manager = EffectManager()
 game_state_manager = GameStateManager()
 ui_manager = UIManager(WINDOW_WIDTH, WINDOW_HEIGHT)
+audio_manager = AudioManager()
 
 # 全局变量
 weapon_drop = None
@@ -51,6 +53,7 @@ last_time = time.time()
 # Boss出现回调机制
 def merged_on_boss_spawn():
     ui_manager.trigger_boss_warning()
+    audio_manager.trigger_boss_bgm()
 
 # Boss死亡特效触发函数
 def on_boss_dead(pos=None):
@@ -145,6 +148,9 @@ while running:
         
         # 更新敌人管理器
         enemy_manager.update(map_manager.is_valid_position, delta_time)
+        
+        # 更新音频管理器
+        audio_manager.update(delta_time)
 
         # 处理攻击按键
         if keys[pygame.K_SPACE]:
@@ -175,7 +181,7 @@ while running:
         if weapon_drop:
             weapon_drop.update()
             weapon_drop.draw(visible_area, camera_x, camera_y)
-            weapon_drop.draw_pickup_prompt(visible_area, camera_x, camera_y, player.rect.center)
+            weapon_drop.draw_pickup_prompt(visible_area, camera_x, camera_y, player.rect.center,ui_manager.font)
         
         # 绘制玩家
         player.draw(visible_area, camera_x, camera_y)
