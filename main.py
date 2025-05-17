@@ -12,6 +12,11 @@ from audio_manager import AudioManager
 
 # 初始化
 pygame.init()
+# 添加音频系统初始化，设置足够的声道数量
+pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=1024)
+pygame.mixer.set_num_channels(32)  # 设置足够多的声道
+print("音频系统初始化完成，声道数量:", pygame.mixer.get_num_channels())
+
 WINDOW_WIDTH, WINDOW_HEIGHT = 800, 600
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("Tom's Dungeon")
@@ -117,6 +122,8 @@ while running:
                     game_state_manager.toggle_debug_display()
                 elif event.key == pygame.K_c:
                     game_state_manager.toggle_collision_display()
+                elif event.key == pygame.K_LSHIFT:
+                    player.dash()
                 # 开发者控制台按键
                 elif game_state_manager.is_developer_mode():
                     if event.key == pygame.K_1:  # 按1生成swd2

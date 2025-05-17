@@ -14,8 +14,8 @@ class Player:
         rect_y = spawn_pos[1] + (sprite_h - rect_h)
         self.rect = pygame.Rect(rect_x, rect_y, rect_w, rect_h)
         self.move_speed = 1.8
-        self.max_health = 1000
-        self.current_health = 10
+        self.max_health = 200
+        self.current_health = 200
         self.is_dead = False
         self.attacking = False
         self.attack_timer = 0
@@ -54,6 +54,44 @@ class Player:
         self.attack_sound.set_volume(0.5)
         self.attack_none_sound = pygame.mixer.Sound("assets/sound/hitnone.wav")
         self.attack_none_sound.set_volume(0.5)
+        self.is_dashing = False
+        self.dash_cooldown = 1.0  # 冲刺冷却（秒）
+        self.dash_last_time = 0
+        self.dash_duration = 0.2  # 冲刺持续时间（秒）
+        self.dash_timer = 0
+        self.dash_speed = self.move_speed * 1.8  # 冲刺速度
+        self.dash_sound = pygame.mixer.Sound("assets/sound/dash.wav")
+        self.dash_sound.set_volume(0.3)
+        self.walk_sound = pygame.mixer.Sound("assets/sound/walk.wav")
+        self.walk_sound.set_volume(0.2)
+        self.walk_channel = None  # 用于控制走路音效的播放
+        
+        # 受伤音效
+        try:
+            self.hurt_sound = pygame.mixer.Sound("assets/sound/hurt_out.wav")
+            self.hurt_sound.set_volume(0.3)
+            print("受伤音效加载成功")
+        except Exception as e:
+            print(f"受伤音效初始化失败: {e}")
+            self.hurt_sound = None
+        
+        # 死亡音效相关设置
+        try:
+            self.death_sound = pygame.mixer.Sound("assets/sound/death.wav")
+            self.death_sound.set_volume(0.5)
+            print("死亡音效加载成功")
+            # 预先尝试播放一次（音量为0）以确保声道正常工作
+            temp_channel = pygame.mixer.Channel(1)
+            temp_channel.set_volume(0)
+            temp_channel.play(self.death_sound, maxtime=1)  # 只播放1毫秒
+            temp_channel.stop()
+            print("死亡音效声道测试成功")
+        except Exception as e:
+            print(f"死亡音效初始化失败: {e}")
+            self.death_sound = None
+            
+        self.death_sound_played = False
+        self.death_channel = None  # 专用于死亡音效的声道
     
     def _load_frames(self, action):
         img_dir = "assets/characters/player_frames"
@@ -89,6 +127,8 @@ class Player:
     def move(self, keys, is_valid_position):
         if self.is_dead:
             return  # 死亡后不能移动
+        if self.is_dashing:
+            return  # 冲刺期间不能手动移动
         old_x, old_y = self.rect.topleft
         self.is_moving = False
         
@@ -133,7 +173,16 @@ class Player:
             self.attack_timer = current_time
             self.attack_last_time = current_time
             self.generate_attack_rect()  # 攻击时生成判定区域
-            # 不再在这里播放音效
+            # 只要攻击动作触发，无论是否移动，都播放空挥音效
+            if hasattr(self, 'attack_none_sound') and self.attack_none_sound:
+                try:
+                    channel = pygame.mixer.Channel(7)
+                    channel.stop()
+                    channel.set_volume(0.5)
+                    channel.play(self.attack_none_sound)
+                except Exception as e:
+                    print(f"播放空挥音效失败: {e}")
+                    self.attack_none_sound.play()
             return True
         return False
 
@@ -166,12 +215,46 @@ class Player:
         if self.is_dead:
             self.action = "death"
             frames_list = self.frames.get("death")
+            
+            # 确保死亡音效播放
+            if not self.death_sound_played and hasattr(self, 'death_sound') and self.death_sound:
+                try:
+                    print("update中检测到死亡状态，尝试播放死亡音效")
+                    # 直接使用pygame.mixer.Sound.play()方法播放
+                    self.death_sound.play()
+                    self.death_sound_played = True
+                except Exception as e:
+                    print(f"update中播放死亡音效失败: {e}")
+            
             if frames_list and self.frame_idx < len(frames_list) - 1:
                 self.frame_timer += 1/60
                 if self.frame_timer >= self.frame_interval:
                     self.frame_timer = 0
                     self.frame_idx += 1
+            # 死亡时停止走路音效
+            if self.walk_channel and self.walk_channel.get_busy():
+                self.walk_channel.stop()
             return  # 死亡时不再处理其它状态
+        # 冲刺逻辑
+        if self.is_dashing:
+            # 冲刺时也停止走路音效
+            if self.walk_channel and self.walk_channel.get_busy():
+                self.walk_channel.stop()
+            speed = self.dash_speed
+            if self.direction == "left":
+                self.rect.x -= speed
+            elif self.direction == "right":
+                self.rect.x += speed
+            elif self.direction == "up":
+                self.rect.y -= speed
+            elif self.direction == "down":
+                self.rect.y += speed
+            self.action = "move"  # 用move动画代替
+            self.is_moving = True
+            if now - self.dash_timer >= self.dash_duration:
+                self.is_dashing = False
+                self.invincible = False
+            return
         elif self.attacking:
             self.action = "attack"
             if now - self.attack_timer >= self.attack_duration:
@@ -209,12 +292,30 @@ class Player:
         if self.invincible:
             if now - self.invincible_timer >= self.invincible_duration:
                 self.invincible = False
+        # 走路音效控制
+        if self.is_moving and not self.is_dead:
+            if not self.walk_channel or not self.walk_channel.get_busy():
+                self.walk_channel = self.walk_sound.play(loops=-1)
+        else:
+            if self.walk_channel and self.walk_channel.get_busy():
+                self.walk_channel.stop()
 
     def take_damage(self, damage):
         if not self.is_dead and not self.invincible:
             self.current_health = max(0, self.current_health - damage)
             self.invincible = True
             self.invincible_timer = time.time()
+            # 播放受伤音效
+            if hasattr(self, 'hurt_sound') and self.hurt_sound:
+                try:
+                    channel = pygame.mixer.Channel(6)
+                    channel.stop()
+                    channel.set_volume(0.3)
+                    channel.play(self.hurt_sound)
+                    print("播放受伤音效")
+                except Exception as e:
+                    print(f"播放受伤音效失败: {e}")
+                    self.hurt_sound.play()
             if self.current_health <= 0:
                 self.die()
             return True
@@ -224,9 +325,34 @@ class Player:
         if not self.is_dead:
             self.is_dead = True
             self.frame_idx = 0
+            print("角色死亡，播放死亡音效")  # 调试用
+            
+            # 停止走路音效
+            if self.walk_channel and self.walk_channel.get_busy():
+                self.walk_channel.stop()
+                
+            # 确保音效只播放一次
+            if not self.death_sound_played and hasattr(self, 'death_sound') and self.death_sound:
+                try:
+                    # 先停止可能干扰的其他音效
+                    pygame.mixer.stop()
+                    
+                    # 死亡音效用1号声道
+                    death_channel = pygame.mixer.Channel(1)
+                    death_channel.stop()
+                    death_channel.set_volume(0.5)
+                    death_channel.play(self.death_sound)
+                    self.death_sound_played = True
+                    print("死亡音效已尝试播放")
+                    
+                except Exception as e:
+                    print(f"播放死亡音效时出错: {e}")  # 调试用
 
     def heal(self, amount):
         self.current_health = min(self.max_health, self.current_health + amount)
+        if self.current_health > 0 and self.is_dead:
+            self.is_dead = False
+            self.death_sound_played = False  # 重置死亡音效播放标志，以便复活后再次死亡时能播放
 
     def jump(self):
         if not self.is_jumping and not self.is_dead:
@@ -331,11 +457,37 @@ class Player:
         return self.current_health / self.max_health 
 
     def play_hit_sound(self):
+        print("命中敌人音效触发")  # 调试
         if hasattr(self, 'attack_sound') and self.attack_sound:
-            self.attack_sound.play() 
+            try:
+                channel = pygame.mixer.Channel(5)
+                channel.stop()
+                channel.set_volume(0.5)
+                channel.play(self.attack_sound)
+            except Exception as e:
+                print(f"播放攻击音效失败: {e}")
+                self.attack_sound.play()
 
     @property
     def death_anim_finished(self):
         # 死亡动画帧是否已到最后一帧
         frames_list = self.frames.get("death")
         return self.is_dead and frames_list and self.frame_idx == len(frames_list) - 1 
+
+    def dash(self):
+        now = time.time()
+        if not self.is_dead and not self.is_dashing and now - self.dash_last_time >= self.dash_cooldown:
+            self.is_dashing = True
+            self.dash_timer = now
+            self.dash_last_time = now
+            self.invincible = True  # 冲刺期间无敌
+            # 无论是否移动，都播放冲刺音效
+            if hasattr(self, 'dash_sound') and self.dash_sound:
+                try:
+                    channel = pygame.mixer.Channel(4)
+                    channel.stop()
+                    channel.set_volume(0.3)
+                    channel.play(self.dash_sound)
+                except Exception as e:
+                    print(f"播放冲刺音效失败: {e}")
+                    self.dash_sound.play() 
