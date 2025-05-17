@@ -103,11 +103,17 @@ while running:
                 elif event.key == pygame.K_c:
                     game_state_manager.toggle_collision_display()
                 elif event.key == pygame.K_e and game_state_manager.show_collision:
-                    map_manager.toggle_collision_at_position(player.rect.centerx, player.rect.centery)
-                    game_state_manager.mark_collision_modified()
+                    if game_state_manager.is_developer_mode():
+                        map_manager.toggle_collision_at_position(player.rect.centerx, player.rect.centery)
+                        game_state_manager.mark_collision_modified()
+                    else:
+                        print("需要开启开发者模式才能修改碰撞体")
                 elif event.key == pygame.K_s:
-                    if map_manager.save_collision_map():
-                        game_state_manager.reset_auto_save()
+                    if game_state_manager.is_developer_mode():
+                        if map_manager.save_collision_map():
+                            game_state_manager.reset_auto_save()
+                    else:
+                        print("需要开启开发者模式才能保存碰撞地图")
                 elif event.key == pygame.K_d:
                     tile_x = player.rect.centerx // map_manager.tile_width
                     tile_y = player.rect.centery // map_manager.tile_height
@@ -120,11 +126,14 @@ while running:
                     player.heal(10)
                     print(f"Player healed! Health: {player.current_health}/{player.max_health}")
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and game_state_manager.current_state == GameState.RUNNING and game_state_manager.show_collision:
-            mouse_x, mouse_y = pygame.mouse.get_pos()
-            unscaled_x = int(camera_x + (mouse_x / WINDOW_WIDTH) * zoomed_width)
-            unscaled_y = int(camera_y + (mouse_y / WINDOW_HEIGHT) * zoomed_height)
-            map_manager.toggle_collision_at_position(unscaled_x, unscaled_y)
-            game_state_manager.mark_collision_modified()
+            if game_state_manager.is_developer_mode():
+                mouse_x, mouse_y = pygame.mouse.get_pos()
+                unscaled_x = int(camera_x + (mouse_x / WINDOW_WIDTH) * zoomed_width)
+                unscaled_y = int(camera_y + (mouse_y / WINDOW_HEIGHT) * zoomed_height)
+                map_manager.toggle_collision_at_position(unscaled_x, unscaled_y)
+                game_state_manager.mark_collision_modified()
+            else:
+                print("需要开启开发者模式才能修改碰撞体")
 
     if game_state_manager.current_state == GameState.RUNNING:
         # 玩家移动
