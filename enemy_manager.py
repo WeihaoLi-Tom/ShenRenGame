@@ -9,10 +9,10 @@ class EnemyManager:
         self.enemies = []
         self.boss = None
         self.spawn_timer = 0
-        self.spawn_interval = 30.0  # 每10秒生成一个新敌人
+        self.spawn_interval = 7.0  # 每10秒生成一个新敌人
         self.max_enemies = 5  # 场上最多同时存在5个敌人
         self.killed_count = 0
-        self.boss_spawn_threshold = 1  # 杀死5个小敌人后生成Boss
+        self.boss_spawn_threshold = 2  # 杀死5个小敌人后生成Boss
         self.boss_spawned = False
         self.on_boss_spawn = None  # Boss出现回调
         
@@ -25,6 +25,10 @@ class EnemyManager:
     
     def spawn_enemy(self):
         """生成一个新的普通敌人"""
+        # 如果Boss存在，不生成新敌人
+        if self.boss and self.boss.alive:
+            return
+            
         if len(self.enemies) < self.max_enemies:
             pos = self.find_safe_enemy_spawn(100)
             if pos is not None:
@@ -75,11 +79,12 @@ class EnemyManager:
         return None
     
     def update(self, is_valid_position, delta_time):
-        # 更新敌人生成计时器
-        self.spawn_timer += delta_time
-        if self.spawn_timer >= self.spawn_interval:
-            self.spawn_timer = 0
-            self.spawn_enemy()
+        # 更新敌人生成计时器（只有在Boss不存在时才生成新敌人）
+        if not (self.boss and self.boss.alive):
+            self.spawn_timer += delta_time
+            if self.spawn_timer >= self.spawn_interval:
+                self.spawn_timer = 0
+                self.spawn_enemy()
         
         # 更新所有敌人
         for enemy in self.enemies[:]:  # 使用副本遍历，以便安全删除
@@ -122,10 +127,16 @@ class EnemyManager:
             print(f"命中Boss! Boss血量: {self.boss.current_health}")
             hit = True
             
-            # 检测Boss是否死亡，如果是，立即在正确位置触发特效
+            # 检测Boss是否死亡，如果是，立即在正确位置触发特效并停止BGM
             if not self.boss.alive and hasattr(self, 'on_boss_dead') and self.on_boss_dead:
                 exact_pos = self.boss.death_position or self.boss.rect.center
                 self.on_boss_dead(exact_pos)
+                # 停止BGM
+                try:
+                    pygame.mixer.music.fadeout(2000)  # 淡出音乐2秒
+                    print("Boss死亡，停止BGM")
+                except Exception as e:
+                    print(f"停止BGM时出错: {e}")
                 self.on_boss_dead = None  # 只触发一次
             
         return hit

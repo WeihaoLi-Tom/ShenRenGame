@@ -140,10 +140,53 @@ class ExplosionRing:
         pygame.draw.circle(temp_surf, (255, 255, 180, alpha), (radius + 10, radius + 10), radius, max(2, int(6 * zoom)))
         surface.blit(temp_surf, (screen_x - radius - 10, screen_y - radius - 10))
 
+# 添加武器掉落类
+class WeaponDrop:
+    def __init__(self, pos, img_path="assets/weapon/swd2.png"):
+        self.pos = pos
+        self.rect = pygame.Rect(pos[0]-16, pos[1]-16, 32, 32)  # 较大的拾取范围
+        try:
+            self.image = pygame.image.load(img_path).convert_alpha()
+            self.image = pygame.transform.scale(self.image, (32, 32))
+        except Exception as e:
+            print(f"加载武器图片时出错: {e}")
+            self.image = pygame.Surface((32, 32), pygame.SRCALPHA)
+            pygame.draw.rect(self.image, (255, 215, 0), (0, 0, 32, 32))
+        self.hover_offset = 0
+        self.hover_speed = 2
+        self.hover_direction = 1
+        self.glow_alpha = 0
+        self.glow_direction = 5  # 透明度变化速度
+        self.birth_time = time.time()
+        
+    def update(self):
+        # 上下浮动动画
+        self.hover_offset += self.hover_speed * self.hover_direction * 0.05
+        if abs(self.hover_offset) >= 5:
+            self.hover_direction *= -1
+            
+        # 光环透明度动画
+        self.glow_alpha += self.glow_direction
+        if self.glow_alpha >= 180 or self.glow_alpha <= 30:
+            self.glow_direction *= -1
+            
+    def draw(self, surface, camera_x, camera_y):
+        # 绘制光环
+        glow_surf = pygame.Surface((48, 48), pygame.SRCALPHA)
+        pygame.draw.circle(glow_surf, (255, 215, 0, self.glow_alpha), (24, 24), 20)
+        surface.blit(glow_surf, (self.pos[0] - camera_x - 24, self.pos[1] - camera_y - 24 + self.hover_offset))
+        
+        # 只绘制旋转后的武器图像
+        angle = (time.time() - self.birth_time) * 20 % 360
+        rotated_img = pygame.transform.rotate(self.image, angle)
+        rot_rect = rotated_img.get_rect(center=(self.pos[0] - camera_x, self.pos[1] - camera_y + self.hover_offset))
+        surface.blit(rotated_img, rot_rect)
+
 # 全局变量
 explosion_particles = []
 explosion_rings = []
 boss_dead_timer = 0
+weapon_drop = None  # 存储武器掉落实例
 
 # 初始化敌人管理器
 enemy_manager = EnemyManager(map_manager, player)
@@ -164,7 +207,8 @@ last_time = time.time()
 # 渐进BGM相关
 boss_bgm_fadein = False
 boss_bgm_fadein_timer = 0
-boss_bgm_fadein_duration = 2.0  # 渐变时长2秒
+boss_bgm_fadein_duration = 5.0  # 渐变时长2秒
+boss_bgm_max_volume = 0.2       # 最大音量上限
 
 # Boss出现回调机制
 def on_boss_spawn():
@@ -183,11 +227,9 @@ def merged_on_boss_spawn():
     boss_bgm_fadein_trigger()
     on_boss_spawn()
 
-enemy_manager.on_boss_spawn = merged_on_boss_spawn
-
 # Boss死亡特效触发函数
 def on_boss_dead(pos=None):
-    global boss_dead_timer, explosion_particles, explosion_rings
+    global boss_dead_timer, explosion_particles, explosion_rings, weapon_drop
     boss_dead_timer = time.time()
     
     # 使用传入的正确死亡位置(如果有)，否则使用Boss当前位置
@@ -208,6 +250,10 @@ def on_boss_dead(pos=None):
     # 生成冲击波圆环
     explosion_rings.append(ExplosionRing((bx, by)))
     print(f"创建了{len(explosion_particles)}个爆炸粒子和{len(explosion_rings)}个冲击波圆环")
+    
+    # 生成武器掉落
+    weapon_drop = WeaponDrop((bx, by))
+    print("Boss掉落了一把武器: swd2.png")
 
 # 小怪死亡特效触发函数
 def on_enemy_dead(pos):
@@ -217,6 +263,11 @@ def on_enemy_dead(pos):
         p.color = random.choice([(180, 220, 255), (120, 180, 255)])  # 幽灵蓝色系
         p.life = random.uniform(0.2, 0.4)
         explosion_particles.append(p)
+
+# 保证所有回调注册在主循环前
+enemy_manager.on_boss_spawn = merged_on_boss_spawn
+enemy_manager.on_boss_dead = on_boss_dead
+enemy_manager.on_enemy_dead = on_enemy_dead
 
 def draw_fps():
     global fps, fps_timer, fps_counter
@@ -255,7 +306,14 @@ while running:
             if event.key == pygame.K_ESCAPE:
                 game_state = GameState.PAUSED if game_state == GameState.RUNNING else GameState.RUNNING
             elif game_state == GameState.RUNNING:
-                if event.key == pygame.K_f:  # F键切换调试信息
+                if event.key == pygame.K_f:  # F键只用于拾取武器
+                    # 检查是否在武器掉落物附近
+                    if weapon_drop and weapon_drop.rect.collidepoint(player.rect.center):
+                        # 更换玩家武器
+                        player.equip_new_sword("assets/weapon/swd2.png")
+                        print("玩家拾取了新武器!")
+                        weapon_drop = None  # 移除掉落物
+                elif event.key == pygame.K_TAB:  # Tab键用于切换调试信息
                     show_debug = not show_debug
                     print(f"Debug info: {'ON' if show_debug else 'OFF'}")
                 elif event.key == pygame.K_c:
@@ -304,7 +362,7 @@ while running:
                 # 攻击判定
                 attack_rect = player.attack_rect
                 enemy_manager.check_attacks(attack_rect)
-
+                
         # 摄像机跟随逻辑
         camera_x = player.rect.centerx - zoomed_width // 2
         camera_y = player.rect.centery - zoomed_height // 2
@@ -322,6 +380,27 @@ while running:
         
         # 绘制敌人
         enemy_manager.draw(visible_area, camera_x, camera_y)
+        
+        # 绘制武器掉落物
+        if weapon_drop:
+            weapon_drop.update()
+            weapon_drop.draw(visible_area, camera_x, camera_y)
+            
+            # 检查玩家是否靠近武器，显示拾取提示
+            pickup_distance = 50  # 提示显示距离
+            px, py = player.rect.center
+            wx, wy = weapon_drop.pos
+            if ((px - wx) ** 2 + (py - wy) ** 2) ** 0.5 < pickup_distance:
+                # 绘制提示文本
+                pickup_font = pygame.font.Font(None, 20)
+                pickup_text = pickup_font.render("Press F to Pick Up !", True, (255, 255, 255))
+                text_x = wx - camera_x - pickup_text.get_width() // 2
+                text_y = wy - camera_y - 40  # 在武器上方显示
+                # 添加文字背景
+                text_bg = pygame.Surface((pickup_text.get_width() + 10, pickup_text.get_height() + 6), pygame.SRCALPHA)
+                pygame.draw.rect(text_bg, (0, 0, 0, 150), text_bg.get_rect(), 0, 3)
+                visible_area.blit(text_bg, (text_x - 5, text_y - 3))
+                visible_area.blit(pickup_text, (text_x, text_y))
         
         # 绘制玩家
         player.draw(visible_area, camera_x, camera_y)
@@ -387,9 +466,9 @@ while running:
 
         if boss_bgm_fadein:
             boss_bgm_fadein_timer += clock.get_time() / 1000.0
-            vol = min(boss_bgm_fadein_timer / boss_bgm_fadein_duration, 1.0)
+            vol = min(boss_bgm_fadein_timer / boss_bgm_fadein_duration, 1.0) * boss_bgm_max_volume
             pygame.mixer.music.set_volume(vol)
-            if vol >= 1.0:
+            if vol >= boss_bgm_max_volume:
                 boss_bgm_fadein = False
     else:
         # 暂停状态显示

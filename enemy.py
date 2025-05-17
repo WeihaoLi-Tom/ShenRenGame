@@ -203,8 +203,8 @@ class BossEnemy:
         self.rect.topleft = pos
         self.float_x = float(self.rect.x)
         self.float_y = float(self.rect.y)
-        self.max_health = 100
-        self.current_health = 100
+        self.max_health = 200
+        self.current_health = 200
         self.move_speed = 0.4  # 基础速度
         self.alive = True
         self.invincible = False
@@ -321,7 +321,7 @@ class BossEnemy:
         if self.phase == 1 and self.current_health <= self.max_health // 2:
             self.phase = 2
             self.phase2_triggered = True
-            print("Boss进入二阶段！")
+            print("Boss进入二阶段！无视碰撞")
         # 更新加速状态
         current_time = time.time()
         if self.is_dashing:
@@ -456,6 +456,14 @@ class BossEnemy:
         """追踪玩家的移动逻辑（只能上下左右单轴移动，有碰撞检测）"""
         if dist == 0:
             return
+        # 二阶段无视碰撞直接移动
+        if self.phase == 2:
+            move_x = self.move_speed * (dx / dist)
+            move_y = self.move_speed * (dy / dist)
+            self.float_x += move_x
+            self.float_y += move_y
+            return
+            
         # 优先移动距离更远的轴
         if abs(dx) > abs(dy):
             move_x = self.move_speed * (1 if dx > 0 else -1)
@@ -751,6 +759,13 @@ class BossEnemy:
         move_y = self.move_speed * dy / dist
         next_x = self.float_x + move_x
         next_y = self.float_y + move_y
+        
+        # 二阶段无视碰撞直接移动
+        if self.phase == 2:
+            self.float_x = next_x
+            self.float_y = next_y
+            return
+            
         if is_valid_position(int(next_x + self.rect.width//2), int(next_y + self.rect.height//2)):
             self.float_x = next_x
             self.float_y = next_y
@@ -762,6 +777,18 @@ class BossEnemy:
         collision = self.map_manager.collision_map
         if avoid_tiles is None:
             avoid_tiles = set()
+            
+        # 二阶段无视碰撞，直接返回目标路径
+        if self.phase == 2:
+            # 如果有多个目标，选择最近的
+            if len(goals) > 1:
+                nearest_goal = min(goals, key=lambda g: abs(g[0] - start[0]) + abs(g[1] - start[1]))
+                return [start, nearest_goal]
+            elif len(goals) == 1:
+                return [start, goals[0]]
+            else:
+                return [start]
+                
         def heuristic(a, b):
             return abs(a[0] - b[0]) + abs(a[1] - b[1])
         open_set = []

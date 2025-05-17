@@ -17,7 +17,7 @@ class Player:
         self.attack_cooldown = 1  # 攻击冷却时间（秒）
         self.attack_last_time = 0
         self.attack_range = self.tile_width  # 攻击范围
-        self.attack_damage = 10
+        self.attack_damage = 15
         self.facing = "right"  # 玩家朝向，用于决定攻击方向
         # 添加剑的攻击判定区域
         self.attack_rect = pygame.Rect(0, 0, 0, 0)
@@ -363,3 +363,22 @@ class Player:
     @property
     def health_percent(self):
         return self.current_health / self.max_health 
+
+    def equip_new_sword(self, sword_path):
+        """更换玩家的武器"""
+        try:
+            img = pygame.image.load(sword_path).convert_alpha()
+            self.sword_img = pygame.transform.scale(img, (self.tile_width, self.tile_height))
+            # 提升攻击力
+            self.attack_damage = 20  # 双倍攻击力
+            print(f"武器更换成功! 攻击力提升到: {self.attack_damage}")
+            # 播放装备音效
+            try:
+                equip_sound = pygame.mixer.Sound("assets/sfx/item.wav")
+                equip_sound.play()
+            except Exception as e:
+                print(f"播放装备音效失败: {e}")
+            return True
+        except Exception as e:
+            print(f"加载新武器图片时出错: {e}")
+            return False 
