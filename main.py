@@ -175,7 +175,7 @@ while running:
             map_manager.draw_collision_overlay(visible_area, camera_x, camera_y, zoomed_width, zoomed_height)
         
         # 绘制敌人
-        enemy_manager.draw(visible_area, camera_x, camera_y)
+        enemy_manager.draw(visible_area, camera_x, camera_y, ui_manager.font)
         
         # 绘制武器掉落物
         if weapon_drop:

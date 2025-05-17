@@ -265,6 +265,7 @@ class BossEnemy:
         self.load_ha_image((24, 24))  # 弹幕缩小一点更美观
         self.phase2_particles = []  # 二阶段粒子特效
         self.phase2_particle_timer = 0
+        self.phase2_tip = None  # (显示时间戳, alpha)
 
     def set_map_manager(self, map_manager):
         self.map_manager = map_manager
@@ -322,6 +323,7 @@ class BossEnemy:
             self.phase = 2
             self.phase2_triggered = True
             print("Boss进入二阶段！无视碰撞")
+            self.phase2_tip = (time.time(), 255)  # 进入二阶段时触发提示
         # 更新加速状态
         current_time = time.time()
         if self.is_dashing:
@@ -648,7 +650,7 @@ class BossEnemy:
             p['life'] -= 1
         self.phase2_particles = [p for p in self.phase2_particles if p['life'] > 0]
 
-    def draw(self, surface, camera_x, camera_y):
+    def draw(self, surface, camera_x, camera_y, font=None):
         if not self.alive:
             return
         x = self.rect.x - camera_x
@@ -696,6 +698,45 @@ class BossEnemy:
             img = pygame.transform.rotozoom(bullet['img'], 0, scale)
             img_rect = img.get_rect(center=(bullet['x']-camera_x, bullet['y']-camera_y))
             surface.blit(img, img_rect)
+        # ====== 新增：绘制"飞升喵星！"浮动提示 ======
+        if self.phase2_tip and font is not None:
+            start_time, _ = self.phase2_tip
+            elapsed = time.time() - start_time
+            duration = 2  # 总显示时长（秒）
+            fade_duration = 0.8  # 渐隐时长
+            if elapsed < duration:
+                if elapsed > (duration - fade_duration):
+                    alpha = int(255 * (1 - (elapsed - (duration - fade_duration)) / fade_duration))
+                else:
+                    alpha = 255
+                small_font = pygame.font.Font(font.get_name(), 10) if hasattr(font, 'get_name') else font
+                tip_text = small_font.render("飞升喵星！", True, (255, 255, 0))
+                scale = 0.5
+                tip_text = pygame.transform.smoothscale(tip_text, (int(tip_text.get_width()*scale), int(tip_text.get_height()*scale)))
+                tip_text.set_alpha(alpha)
+
+                # ---- 美化：添加圆角半透明背景 ----
+                padding = 8
+                bg_w = tip_text.get_width() + padding
+                bg_h = tip_text.get_height() + padding
+                bg_surf = pygame.Surface((bg_w, bg_h), pygame.SRCALPHA)
+                # 画圆角矩形
+                pygame.draw.rect(bg_surf, (0, 0, 0, int(alpha*0.6)), (0, 0, bg_w, bg_h), border_radius=bg_h//2)
+                # ---- 美化：伪描边 ----
+                for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
+                    outline = small_font.render("飞升喵星！", True, (0,0,0))
+                    outline = pygame.transform.smoothscale(outline, (int(outline.get_width()*scale), int(outline.get_height()*scale)))
+                    outline.set_alpha(alpha)
+                    bg_surf.blit(outline, (padding//2+dx, padding//2+dy))
+                # 正常文字
+                bg_surf.blit(tip_text, (padding//2, padding//2))
+
+                tip_x = self.rect.centerx - camera_x - bg_w // 2
+                tip_y = self.rect.top - camera_y - 38  # 适当上移
+                surface.blit(bg_surf, (tip_x, tip_y))
+            else:
+                self.phase2_tip = None
+        # ====== 新增结束 ======
 
     def draw_health_bar(self, surface, x, y, width, height):
         bg_rect = pygame.Rect(x, y, width, height)

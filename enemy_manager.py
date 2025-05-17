@@ -141,11 +141,11 @@ class EnemyManager:
             
         return hit
     
-    def draw(self, surface, camera_x, camera_y):
+    def draw(self, surface, camera_x, camera_y, font=None):
         # 绘制所有敌人
         for enemy in self.enemies:
             enemy.draw(surface, camera_x, camera_y)
         
         # 绘制Boss (如果存在)
         if self.boss and self.boss.alive:
-            self.boss.draw(surface, camera_x, camera_y) 
+            self.boss.draw(surface, camera_x, camera_y, font) 
