@@ -122,11 +122,18 @@ class Player:
             if not self.orbit_attack_anim and current_time - self.attack_last_time >= self.attack_cooldown:
                 self.orbit_attack_anim = True
                 self.orbit_attack_start_time = current_time
-                self.orbit_attack_angle = 0
                 self.attack_last_time = current_time
                 self.orbit_attack_hit = False
                 # 记录环绕中心点
                 self.orbit_center = (self.rect.x + self.rect.width / 2, self.rect.y + self.rect.height / 2)
+                # 记录起始角度
+                facing_angle = {
+                    'right': 0,
+                    'down': 90,
+                    'left': 180,
+                    'up': 270
+                }.get(self.facing, 0)
+                self.orbit_start_angle = facing_angle
                 return True
             return False
         # 原有突刺逻辑
@@ -213,11 +220,11 @@ class Player:
             current_time = time.time()
             elapsed = current_time - self.orbit_attack_start_time
             t = min(elapsed / self.orbit_attack_duration, 1.0)
-            self.orbit_attack_angle = 360 * t
-            # 用固定的orbit_center
+            # 角度从起始角度转到起始角度+360°
+            angle_deg = getattr(self, 'orbit_start_angle', 0) + 360 * t
+            self.orbit_attack_angle = angle_deg
             center_x, center_y = getattr(self, 'orbit_center', (self.rect.x + self.rect.width / 2, self.rect.y + self.rect.height / 2))
             radius = 40
-            angle_deg = self.orbit_attack_angle
             angle_rad = math.radians(angle_deg)
             sword_x = center_x + radius * math.cos(angle_rad)
             sword_y = center_y + radius * math.sin(angle_rad)
