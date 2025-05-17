@@ -105,6 +105,12 @@ while running:
                     game_state_manager.toggle_debug_display()
                 elif event.key == pygame.K_c:
                     game_state_manager.toggle_collision_display()
+                # 开发者控制台按键
+                elif game_state_manager.is_developer_mode():
+                    if event.key == pygame.K_1:  # 按1生成swd2
+                        weapon_drop = WeaponDrop(player.rect.center)
+                        game_state_manager.console_tip = "已生成swd2"
+                        game_state_manager.console_tip_timer = time.time()
                 elif event.key == pygame.K_e and game_state_manager.show_collision:
                     if game_state_manager.is_developer_mode():
                         map_manager.toggle_collision_at_position(player.rect.centerx, player.rect.centery)
@@ -146,6 +152,13 @@ while running:
         # 更新玩家状态
         player.update()
         
+        # 环绕攻击模式下，动画期间每帧都判定一次
+        if player.attack_mode == "orbit" and player.orbit_attack_anim:
+            attack_rect = player.get_orbit_attack_rect()
+            if attack_rect.width > 0 and not player.orbit_attack_hit:
+                if enemy_manager.check_attacks(attack_rect):
+                    player.orbit_attack_hit = True
+        
         # 更新敌人管理器
         enemy_manager.update(map_manager.is_valid_position, delta_time)
         
@@ -156,8 +169,15 @@ while running:
         if keys[pygame.K_SPACE]:
             if player.attack():
                 print("Player attacked!")
-                attack_rect = player.attack_rect
-                enemy_manager.check_attacks(attack_rect)
+                if player.attack_mode == "orbit":
+                    # 环绕攻击模式下，每帧都检查攻击判定
+                    attack_rect = player.get_orbit_attack_rect()
+                    if attack_rect.width > 0:  # 只在有判定区域时检查
+                        enemy_manager.check_attacks(attack_rect)
+                else:
+                    # 突刺攻击模式
+                    attack_rect = player.attack_rect
+                    enemy_manager.check_attacks(attack_rect)
                 
         # 摄像机跟随逻辑
         camera_x = player.rect.centerx - zoomed_width // 2

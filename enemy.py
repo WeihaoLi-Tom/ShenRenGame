@@ -40,6 +40,12 @@ class Enemy:
         self.random_dir_timer = 0
         self.random_dir_interval = 0.5
         self.random_direction = (0, 0)
+        self.attack_mode = "stab"  # "stab"为突刺，"orbit"为环绕
+        self.orbit_attack_anim = False
+        self.orbit_attack_start_time = 0
+        self.orbit_attack_duration = 0.5  # 环绕动画时长（秒）
+        self.orbit_attack_angle = 0
+        self.orbit_attack_hit = False  # 防止多次判定
 
     def load_image(self, size):
         ghost_path = Path("assets/characters/ghost.png")
@@ -94,7 +100,15 @@ class Enemy:
         if self.invincible:
             if time.time() - self.invincible_timer > self.invincible_duration:
                 self.invincible = False
-    
+        
+        # 环绕攻击逻辑
+        if self.attack_mode == "orbit" and self.orbit_attack_anim:
+            elapsed = time.time() - self.orbit_attack_start_time
+            t = min(elapsed / self.orbit_attack_duration, 1.0)
+            self.orbit_attack_angle = 360 * t
+            if t >= 1.0:
+                self.orbit_attack_anim = False
+
     def chase_player(self, dx, dy, dist):
         """追踪玩家的移动逻辑（只能上下左右单轴移动）"""
         if dist == 0:
@@ -266,6 +280,12 @@ class BossEnemy:
         self.phase2_particles = []  # 二阶段粒子特效
         self.phase2_particle_timer = 0
         self.phase2_tip = None  # (显示时间戳, alpha)
+        self.attack_mode = "stab"  # "stab"为突刺，"orbit"为环绕
+        self.orbit_attack_anim = False
+        self.orbit_attack_start_time = 0
+        self.orbit_attack_duration = 0.5  # 环绕动画时长（秒）
+        self.orbit_attack_angle = 0
+        self.orbit_attack_hit = False  # 防止多次判定
 
     def set_map_manager(self, map_manager):
         self.map_manager = map_manager
@@ -453,6 +473,14 @@ class BossEnemy:
         if hasattr(self, 'haqi_switch_time') and self.image == self.attack_image:
             if time.time() - self.haqi_switch_time > 0.2:
                 self.image = self.normal_image
+        
+        # 环绕攻击逻辑
+        if self.attack_mode == "orbit" and self.orbit_attack_anim:
+            elapsed = time.time() - self.orbit_attack_start_time
+            t = min(elapsed / self.orbit_attack_duration, 1.0)
+            self.orbit_attack_angle = 360 * t
+            if t >= 1.0:
+                self.orbit_attack_anim = False
     
     def chase_player(self, dx, dy, dist, is_valid_position):
         """追踪玩家的移动逻辑（只能上下左右单轴移动，有碰撞检测）"""
@@ -860,3 +888,37 @@ class BossEnemy:
                         f_score[neighbor] = tentative_g + min(heuristic(neighbor, g) for g in goals)
                         heapq.heappush(open_set, (f_score[neighbor], neighbor))
         return [start]  # 找不到路径时只返回起点 
+
+    def attack(self):
+        current_time = time.time()
+        if self.attack_mode == "orbit":
+            if not self.orbit_attack_anim and current_time - self.attack_last_time >= self.attack_cooldown:
+                self.orbit_attack_anim = True
+                self.orbit_attack_start_time = current_time
+                self.orbit_attack_angle = 0
+                self.attack_last_time = current_time
+                self.orbit_attack_hit = False
+            return False  # 不走原有突刺逻辑
+        # 原有突刺逻辑
+        if not self.is_attacking and current_time - self.last_attack_time >= self.attack_cooldown:
+            self.is_attacking = True
+            self.attack_anim_timer = current_time
+            self.last_attack_time = current_time
+            self.generate_attack_rect()
+            return True
+        return False 
+
+    def get_orbit_attack_rect(self):
+        if self.attack_mode == "orbit" and self.orbit_attack_anim:
+            center = self.rect.center
+            radius = 40
+            angle_deg = self.orbit_attack_angle
+            angle_rad = math.radians(angle_deg)
+            sword_x = center[0] + radius * math.cos(angle_rad)
+            sword_y = center[1] + radius * math.sin(angle_rad)
+            # 剑柄始终朝向玩家
+            sword_angle = angle_deg + 90
+            rotated_sword = pygame.transform.rotate(self.sword_img, -sword_angle)
+            sword_rect = rotated_sword.get_rect(center=(sword_x, sword_y))
+            return sword_rect
+        return pygame.Rect(0, 0, 0, 0) 

@@ -2,6 +2,7 @@ import pygame
 import time
 import math
 import os
+from game_state import GameStateManager
 
 class UIManager:
     def __init__(self, window_width, window_height):
@@ -54,6 +55,16 @@ class UIManager:
         for i, text in enumerate(debug_text):
             text_surface = self.font.render(text, True, (255, 255, 255))
             surface.blit(text_surface, (10, 10 + i * 25))
+        
+        # 绘制开发者控制台提示
+        if game_state_manager.console_tip and time.time() - game_state_manager.console_tip_timer < 2.0:
+            tip_text = self.font.render(game_state_manager.console_tip, True, (0, 255, 0))
+            tip_rect = tip_text.get_rect(center=(self.window_width//2, 50))
+            # 绘制半透明背景
+            bg_surf = pygame.Surface((tip_rect.width + 20, tip_rect.height + 10), pygame.SRCALPHA)
+            bg_surf.fill((0, 0, 0, 128))
+            surface.blit(bg_surf, (tip_rect.x - 10, tip_rect.y - 5))
+            surface.blit(tip_text, tip_rect)
         
     def draw_pause_screen(self, surface):
         pause_text = self.font.render("游戏暂停 - 按ESC继续", True, (255, 255, 255))

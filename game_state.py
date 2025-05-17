@@ -15,7 +15,12 @@ class GameStateManager:
         self.AUTO_SAVE_INTERVAL = 60 * 30  # 30分钟自动保存一次
         
         # 开发者模式开关 - 只能通过修改代码来启用
-        self.DEVELOPER_MODE = False
+        self.DEVELOPER_MODE = True  # 临时改为True方便测试
+        
+        # 开发者控制台相关
+        self.console_active = False  # 控制台是否激活
+        self.console_tip = None  # 控制台提示信息
+        self.console_tip_timer = 0  # 提示显示时间
         
     def toggle_pause(self):
         if self.current_state == GameState.RUNNING:

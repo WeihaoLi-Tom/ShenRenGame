@@ -1,6 +1,8 @@
 import pygame
 from pathlib import Path
 import time
+import math
+import random
 
 class Player:
     def __init__(self, spawn_pos, tile_size):
@@ -39,6 +41,17 @@ class Player:
         self.death_angle = 0  # 死亡时的旋转角度
         self.gg_image = self.load_gg_image()
         self.gg_alpha = 0  # GG图片的透明度
+        
+        # 环绕攻击相关
+        self.attack_mode = "stab"  # "stab"为突刺，"orbit"为环绕
+        self.orbit_attack_anim = False
+        self.orbit_attack_start_time = 0
+        self.orbit_attack_duration = 0.5  # 环绕动画时长（秒）
+        self.orbit_attack_angle = 0
+        self.orbit_attack_hit = False  # 防止多次判定
+        self.orbit_trail = []  # 剑影轨迹
+        self.orbit_trail_length = 8  # 剑影数量
+        self.orbit_particles = []  # 粒子特效
     
     def load_image(self):
         player_path = Path("assets/characters/player.png")
@@ -105,12 +118,22 @@ class Player:
                 
     def attack(self):
         current_time = time.time()
+        if self.attack_mode == "orbit":
+            if not self.orbit_attack_anim and current_time - self.attack_last_time >= self.attack_cooldown:
+                self.orbit_attack_anim = True
+                self.orbit_attack_start_time = current_time
+                self.orbit_attack_angle = 0
+                self.attack_last_time = current_time
+                self.orbit_attack_hit = False
+                # 记录环绕中心点
+                self.orbit_center = (self.rect.x + self.rect.width / 2, self.rect.y + self.rect.height / 2)
+                return True
+            return False
+        # 原有突刺逻辑
         if not self.attacking and current_time - self.attack_last_time >= self.attack_cooldown:
             self.attacking = True
             self.attack_timer = current_time
             self.attack_last_time = current_time
-            # 立即生成一个更大的攻击判定区域
-            # 根据朝向，在玩家前方生成一个大范围的攻击判定
             self.generate_attack_rect()
             return True
         return False
@@ -151,6 +174,21 @@ class Player:
                 attack_distance
             )
 
+    def get_orbit_attack_rect(self):
+        if self.attack_mode == "orbit" and self.orbit_attack_anim:
+            center = self.rect.center
+            radius = 40
+            angle_deg = self.orbit_attack_angle
+            angle_rad = math.radians(angle_deg)
+            sword_x = center[0] + radius * math.cos(angle_rad)
+            sword_y = center[1] + radius * math.sin(angle_rad)
+            # 剑柄始终朝向玩家
+            sword_angle = angle_deg + 90
+            rotated_sword = pygame.transform.rotate(self.sword_img, -sword_angle)
+            sword_rect = rotated_sword.get_rect(center=(sword_x, sword_y))
+            return sword_rect
+        return pygame.Rect(0, 0, 0, 0)
+
     def update(self):
         # 更新死亡状态
         if self.is_dead:
@@ -169,6 +207,46 @@ class Player:
             current_time = time.time()
             if current_time - self.attack_timer >= self.attack_duration:
                 self.attacking = False
+        
+        # 更新环绕攻击状态
+        if self.attack_mode == "orbit" and self.orbit_attack_anim:
+            current_time = time.time()
+            elapsed = current_time - self.orbit_attack_start_time
+            t = min(elapsed / self.orbit_attack_duration, 1.0)
+            self.orbit_attack_angle = 360 * t
+            # 用固定的orbit_center
+            center_x, center_y = getattr(self, 'orbit_center', (self.rect.x + self.rect.width / 2, self.rect.y + self.rect.height / 2))
+            radius = 40
+            angle_deg = self.orbit_attack_angle
+            angle_rad = math.radians(angle_deg)
+            sword_x = center_x + radius * math.cos(angle_rad)
+            sword_y = center_y + radius * math.sin(angle_rad)
+            sword_angle = angle_deg + 90
+            # 生成线状粒子（切线方向）
+            for _ in range(2):
+                tangent_angle = angle_rad + math.pi/2  # 切线方向
+                base_speed = random.uniform(1.2, 2.0)
+                tangent_angle += random.uniform(-0.18, 0.18)
+                vx = math.cos(tangent_angle) * base_speed
+                vy = math.sin(tangent_angle) * base_speed
+                self.orbit_particles.append({
+                    'x': sword_x,
+                    'y': sword_y,
+                    'vx': vx,
+                    'vy': vy,
+                    'life': random.uniform(0.35, 0.55),
+                    'age': 0,
+                    'color': (255, 255, random.randint(120, 255)),
+                    'size': random.randint(2, 4)
+                })
+            for p in self.orbit_particles:
+                p['x'] += p['vx']
+                p['y'] += p['vy']
+                p['age'] += 1/60
+            self.orbit_particles = [p for p in self.orbit_particles if p['age'] < p['life']]
+            if t >= 1.0:
+                self.orbit_attack_anim = False
+                self.orbit_particles.clear()
         
         # 更新无敌状态
         if self.invincible:
@@ -249,48 +327,68 @@ class Player:
         if visible:
             surface.blit(self.image, (player_x, player_y))
         
-        # 绘制剑（始终可见）
-        sword_img = self.sword_img.copy()
-        
-        # 剑与角色的基础距离
-        offset = 4  # 让剑更靠近角色
-        
-        # 根据朝向确定角度和基础位置
-        if self.facing == "right":
-            angle = -90  # 剑柄朝左（玩家），剑尖朝右
-            base_x = player_x + self.rect.width + offset
-            base_y = player_y + self.rect.height // 2 + 4  # 向下偏移4像素
-        elif self.facing == "left":
-            angle = 90   # 剑柄朝右（玩家），剑尖朝左
-            base_x = player_x - offset
-            base_y = player_y + self.rect.height // 2 + 4  # 向下偏移4像素
-        elif self.facing == "up":
-            angle = 0    # 剑柄朝下（玩家），剑尖朝上
-            base_x = player_x + self.rect.width // 2
-            base_y = player_y - offset
-        elif self.facing == "down":
-            angle = 180  # 剑柄朝上（玩家），剑尖朝下
-            base_x = player_x + self.rect.width // 2
-            base_y = player_y + self.rect.height + offset
-        
-        # 如果正在攻击，计算突刺偏移
-        if self.attacking:
-            elapsed = time.time() - self.attack_timer
-            progress = min(elapsed / self.attack_duration, 1.0)
-            thrust = 1.0 - 4 * (progress - 0.5) * (progress - 0.5)
-            thrust_distance = int(35 * thrust)  # 保留增加的突刺距离
+        # 绘制剑
+        if self.attack_mode == "orbit" and self.orbit_attack_anim:
+            # 环绕攻击模式
+            center_x, center_y = getattr(self, 'orbit_center', (player_x + self.rect.width/2, player_y + self.rect.height/2))
+            radius = 40
+            angle_deg = self.orbit_attack_angle
+            angle_rad = math.radians(angle_deg)
+            sword_x = center_x + radius * math.cos(angle_rad)
+            sword_y = center_y + radius * math.sin(angle_rad)
+            sword_angle = angle_deg + 90
+            # 粒子特效
+            for p in self.orbit_particles:
+                alpha = int(255 * (1 - p['age']/p['life']))
+                color = (*p['color'], alpha)
+                pygame.draw.circle(surface, color, (int(p['x']-camera_x), int(p['y']-camera_y)), p['size'])
+            # 主剑
+            rotated_sword = pygame.transform.rotate(self.sword_img, -sword_angle)
+            sword_rect = rotated_sword.get_rect(center=(sword_x - camera_x, sword_y - camera_y))
+            surface.blit(rotated_sword, sword_rect.topleft)
+        else:
+            # 原有突刺模式
+            sword_img = self.sword_img.copy()
+            
+            # 剑与角色的基础距离
+            offset = 4
+            
+            # 根据朝向确定角度和基础位置
             if self.facing == "right":
-                base_x += thrust_distance
+                angle = -90  # 剑柄朝左（玩家），剑尖朝右
+                base_x = player_x + self.rect.width + offset
+                base_y = player_y + self.rect.height // 2 + 4  # 向下偏移4像素
             elif self.facing == "left":
-                base_x -= thrust_distance
+                angle = 90   # 剑柄朝右（玩家），剑尖朝左
+                base_x = player_x - offset
+                base_y = player_y + self.rect.height // 2 + 4  # 向下偏移4像素
             elif self.facing == "up":
-                base_y -= thrust_distance
+                angle = 0    # 剑柄朝下（玩家），剑尖朝上
+                base_x = player_x + self.rect.width // 2
+                base_y = player_y - offset
             elif self.facing == "down":
-                base_y += thrust_distance
-        
-        sword_img_rot = pygame.transform.rotate(sword_img, angle)
-        sword_rect = sword_img_rot.get_rect(center=(base_x, base_y))
-        surface.blit(sword_img_rot, sword_rect.topleft)
+                angle = 180  # 剑柄朝上（玩家），剑尖朝下
+                base_x = player_x + self.rect.width // 2
+                base_y = player_y + self.rect.height + offset
+            
+            # 如果正在攻击，计算突刺偏移
+            if self.attacking:
+                elapsed = time.time() - self.attack_timer
+                progress = min(elapsed / self.attack_duration, 1.0)
+                thrust = 1.0 - 4 * (progress - 0.5) * (progress - 0.5)
+                thrust_distance = int(35 * thrust)  # 保留增加的突刺距离
+                if self.facing == "right":
+                    base_x += thrust_distance
+                elif self.facing == "left":
+                    base_x -= thrust_distance
+                elif self.facing == "up":
+                    base_y -= thrust_distance
+                elif self.facing == "down":
+                    base_y += thrust_distance
+            
+            sword_img_rot = pygame.transform.rotate(sword_img, angle)
+            sword_rect = sword_img_rot.get_rect(center=(base_x, base_y))
+            surface.blit(sword_img_rot, sword_rect.topleft)
         
         # 调试：绘制攻击判定区域
         if self.attacking and False:  # 设为True可开启判定区域显示
@@ -371,7 +469,10 @@ class Player:
             self.sword_img = pygame.transform.scale(img, (self.tile_width, self.tile_height))
             # 提升攻击力
             self.attack_damage = 20  # 双倍攻击力
+            # 切换到环绕攻击模式
+            self.attack_mode = "orbit"
             print(f"武器更换成功! 攻击力提升到: {self.attack_damage}")
+            print("切换到环绕攻击模式!")
             # 播放装备音效
             try:
                 equip_sound = pygame.mixer.Sound("assets/sfx/item.wav")
