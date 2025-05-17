@@ -172,7 +172,7 @@ class Enemy:
                 self.current_health = 0
                 self.alive = False
 
-    def draw(self, surface, camera_x, camera_y):
+    def draw(self, surface, camera_x, camera_y, show_debug_hitbox=False):
         if not self.alive:
             return
         x = self.rect.x - camera_x
@@ -185,6 +185,15 @@ class Enemy:
             surface.blit(self.image, (x, y))
         # 绘制血条
         self.draw_health_bar(surface, x, y - 10, self.rect.width, 6)
+        # 调试：绘制碰撞体和攻击范围
+        if show_debug_hitbox:
+            # 敌人碰撞体
+            debug_rect = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(debug_rect, (255, 0, 0, 128), debug_rect.get_rect())
+            surface.blit(debug_rect, (self.rect.x - camera_x, self.rect.y - camera_y))
+            # 攻击范围（假设攻击时有attack_rect属性）
+            if hasattr(self, 'attacking') and self.attacking and hasattr(self, 'attack_rect'):
+                pygame.draw.rect(surface, (0, 0, 255, 120), self.attack_rect.move(-camera_x, -camera_y), 2)
 
     def draw_health_bar(self, surface, x, y, width, height):
         bg_rect = pygame.Rect(x, y, width, height)
@@ -678,7 +687,7 @@ class BossEnemy:
             p['life'] -= 1
         self.phase2_particles = [p for p in self.phase2_particles if p['life'] > 0]
 
-    def draw(self, surface, camera_x, camera_y, font=None):
+    def draw(self, surface, camera_x, camera_y, font=None, show_debug_hitbox=False):
         if not self.alive:
             return
         x = self.rect.x - camera_x
@@ -765,6 +774,14 @@ class BossEnemy:
             else:
                 self.phase2_tip = None
         # ====== 新增结束 ======
+        # 调试：绘制碰撞体和攻击范围
+        if show_debug_hitbox:
+            debug_rect = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
+            pygame.draw.rect(debug_rect, (255, 0, 0, 128), debug_rect.get_rect())
+            surface.blit(debug_rect, (self.rect.x - camera_x, self.rect.y - camera_y))
+            # 攻击范围（假设攻击时有attack_rect属性）
+            if hasattr(self, 'attacking') and self.attacking and hasattr(self, 'attack_rect'):
+                pygame.draw.rect(surface, (0, 0, 255, 120), self.attack_rect.move(-camera_x, -camera_y), 2)
 
     def draw_health_bar(self, surface, x, y, width, height):
         bg_rect = pygame.Rect(x, y, width, height)

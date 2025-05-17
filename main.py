@@ -19,7 +19,7 @@ clock = pygame.time.Clock()
 
 # 初始化各个管理器
 try:
-    map_manager = MapManager("tiled/sampleMap.tmx", debug=True)
+    map_manager = MapManager("tiled/myMap.tmx", debug=True)
 except Exception as e:
     print(f"加载地图时出错: {e}")
     sys.exit(1)
@@ -50,6 +50,11 @@ audio_manager = AudioManager()
 weapon_drop = None
 last_time = time.time()
 
+# 新增：批量碰撞体编辑相关变量
+selecting = False
+select_start = None
+select_end = None
+
 # Boss出现回调机制
 def merged_on_boss_spawn():
     ui_manager.trigger_boss_warning()
@@ -79,6 +84,8 @@ def on_enemy_dead(pos):
 enemy_manager.on_boss_spawn = merged_on_boss_spawn
 enemy_manager.on_boss_dead = on_boss_dead
 enemy_manager.on_enemy_dead = on_enemy_dead
+
+show_debug_hitbox = False
 
 running = True
 while running:
@@ -111,6 +118,9 @@ while running:
                         weapon_drop = WeaponDrop(player.rect.center)
                         game_state_manager.console_tip = "已生成swd2"
                         game_state_manager.console_tip_timer = time.time()
+                    elif event.key == pygame.K_o:
+                        show_debug_hitbox = not show_debug_hitbox
+                        print(f"碰撞体/攻击范围显示: {'开启' if show_debug_hitbox else '关闭'}")
                 elif event.key == pygame.K_e and game_state_manager.show_collision:
                     if game_state_manager.is_developer_mode():
                         map_manager.toggle_collision_at_position(player.rect.centerx, player.rect.centery)
@@ -143,6 +153,38 @@ while running:
                 game_state_manager.mark_collision_modified()
             else:
                 print("需要开启开发者模式才能修改碰撞体")
+        # 开发者模式下右键批量切换碰撞体
+        elif game_state_manager.is_developer_mode():
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+                selecting = True
+                select_start = pygame.mouse.get_pos()
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 3 and selecting:
+                selecting = False
+                select_end = pygame.mouse.get_pos()
+                # 计算选区范围（屏幕坐标转地图格子坐标）
+                x1, y1 = select_start
+                x2, y2 = select_end
+                # 摄像机和缩放参数
+                min_x = min(x1, x2)
+                max_x = max(x1, x2)
+                min_y = min(y1, y2)
+                max_y = max(y1, y2)
+                # 转为地图像素坐标
+                map_x1 = int(camera_x + (min_x / WINDOW_WIDTH) * zoomed_width)
+                map_x2 = int(camera_x + (max_x / WINDOW_WIDTH) * zoomed_width)
+                map_y1 = int(camera_y + (min_y / WINDOW_HEIGHT) * zoomed_height)
+                map_y2 = int(camera_y + (max_y / WINDOW_HEIGHT) * zoomed_height)
+                # 转为tile坐标
+                tile_x1 = max(0, map_x1 // map_manager.tile_width)
+                tile_x2 = min(map_manager.width-1, map_x2 // map_manager.tile_width)
+                tile_y1 = max(0, map_y1 // map_manager.tile_height)
+                tile_y2 = min(map_manager.height-1, map_y2 // map_manager.tile_height)
+                # 批量切换碰撞体
+                for ty in range(tile_y1, tile_y2+1):
+                    for tx in range(tile_x1, tile_x2+1):
+                        map_manager.collision_map[ty][tx] = not map_manager.collision_map[ty][tx]
+                game_state_manager.collision_modified = True
+                print(f"批量切换碰撞体：({tile_x1},{tile_y1}) 到 ({tile_x2},{tile_y2})")
 
     if game_state_manager.current_state == GameState.RUNNING:
         # 玩家移动
@@ -195,7 +237,7 @@ while running:
             map_manager.draw_collision_overlay(visible_area, camera_x, camera_y, zoomed_width, zoomed_height)
         
         # 绘制敌人
-        enemy_manager.draw(visible_area, camera_x, camera_y, ui_manager.font)
+        enemy_manager.draw(visible_area, camera_x, camera_y, ui_manager.font, show_debug_hitbox)
         
         # 绘制武器掉落物
         if weapon_drop:
@@ -204,7 +246,7 @@ while running:
             weapon_drop.draw_pickup_prompt(visible_area, camera_x, camera_y, player.rect.center,ui_manager.font)
         
         # 绘制玩家
-        player.draw(visible_area, camera_x, camera_y)
+        player.draw(visible_area, camera_x, camera_y, show_debug_hitbox)
         
         # 缩放并显示
         scaled_area = pygame.transform.scale(visible_area, (WINDOW_WIDTH, WINDOW_HEIGHT))

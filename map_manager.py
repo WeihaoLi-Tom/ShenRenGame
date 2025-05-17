@@ -37,11 +37,11 @@ class MapManager:
         # 装饰物相关 - 直接加载PNG图片
         self.decoration_images = []
         decoration_paths = [
-            "assets/backgrounds/tile_0063.png",
-            "assets/backgrounds/tile_0064.png",
-            "assets/backgrounds/tile_0065.png",
-            "assets/backgrounds/tile_0072.png",
-            "assets/backgrounds/tile_0082.png",
+            # "assets/backgrounds/tile_0063.png",
+            # "assets/backgrounds/tile_0064.png",
+            # "assets/backgrounds/tile_0065.png",
+            # "assets/backgrounds/tile_0072.png",
+            # "assets/backgrounds/tile_0082.png",
         ]
         for path in decoration_paths:
             try:
@@ -55,7 +55,7 @@ class MapManager:
         
         self.decoration_map = [[None for _ in range(self.width)] for _ in range(self.height)]
         self._load_or_generate_collision()
-        self._generate_decorations()
+        # self._generate_decorations()
 
     def _load_or_generate_collision(self):
         loaded = False
@@ -75,37 +75,20 @@ class MapManager:
 
     def _generate_collision_map(self):
         wall_count = 0
-        collision_layer = None
-        for layer in self.tmx_data.visible_layers:
-            if hasattr(layer, 'name') and (layer.name.lower() == "collision" or layer.name.lower() == "walls"):
-                collision_layer = layer
-                if self.debug:
-                    print(f"找到专用碰撞层: {layer.name}")
-                break
-        if collision_layer:
-            for y, row in enumerate(collision_layer.data):
-                for x, gid in enumerate(row):
-                    if gid != 0:
-                        self.collision_map[y][x] = True
+        # 新逻辑：默认所有格子有碰撞，只有road/walkable属性的图块才无碰撞
+        for y, row in enumerate(self.data):
+            for x, gid in enumerate(row):
+                self.collision_map[y][x] = True  # 默认有碰撞
+                if gid != 0:
+                    tile_props = self.tmx_data.get_tile_properties_by_gid(gid)
+                    if tile_props and ('road' in tile_props or 'walkable' in tile_props):
+                        self.collision_map[y][x] = False  # 只有"路"才可通行
+                    else:
                         wall_count += 1
-        else:
-            for y, row in enumerate(self.data):
-                for x, gid in enumerate(row):
-                    if x == 0 or y == 0 or x == self.width - 1 or y == self.height - 1:
-                        self.collision_map[y][x] = True
-                        wall_count += 1
-                    elif gid != 0:
-                        is_wall = False
-                        if gid in self.wall_gids:
-                            is_wall = True
-                        tile_props = self.tmx_data.get_tile_properties_by_gid(gid)
-                        if tile_props and ('wall' in tile_props or 'collision' in tile_props):
-                            is_wall = True
-                        if is_wall:
-                            self.collision_map[y][x] = True
-                            wall_count += 1
+                else:
+                    wall_count += 1
         if self.debug:
-            print(f"已创建碰撞地图，识别到 {wall_count} 个障碍物瓦片")
+            print(f"已创建碰撞地图，识别到 {wall_count} 个障碍物瓦片 (只认road/walkable为可通行)")
 
     def save_collision_map(self):
         try:
@@ -164,18 +147,19 @@ class MapManager:
                             print(f"在位置 ({x}, {y}) 放置装饰物")
 
     def draw_map(self, surface, camera_x, camera_y, zoomed_width, zoomed_height):
-        # 绘制基础地图
-        for y, row in enumerate(self.data):
-            for x, gid in enumerate(row):
-                tile_x = x * self.tile_width
-                tile_y = y * self.tile_height
-                if (camera_x <= tile_x <= camera_x + zoomed_width and 
-                    camera_y <= tile_y <= camera_y + zoomed_height):
-                    if gid != 0:
-                        tile_img = self.tmx_data.get_tile_image_by_gid(gid)
-                        if tile_img:
-                            surface.blit(tile_img, (tile_x - camera_x, tile_y - camera_y))
-        
+        # 支持多图层绘制
+        for layer in self.tmx_data.visible_layers:
+            if hasattr(layer, 'data'):
+                for y, row in enumerate(layer.data):
+                    for x, gid in enumerate(row):
+                        tile_x = x * self.tile_width
+                        tile_y = y * self.tile_height
+                        if (camera_x <= tile_x <= camera_x + zoomed_width and 
+                            camera_y <= tile_y <= camera_y + zoomed_height):
+                            if gid != 0:
+                                tile_img = self.tmx_data.get_tile_image_by_gid(gid)
+                                if tile_img:
+                                    surface.blit(tile_img, (tile_x - camera_x, tile_y - camera_y))
         # 绘制装饰物
         for y in range(self.height):
             for x in range(self.width):

@@ -1,0 +1,273 @@
+
+c_09.png
+size: 1024,512
+format: RGBA8888
+filter: Linear,Linear
+pma: true
+repeat: none
+attack_n_01
+  rotate: true
+  xy: 516, 166
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+attack_n_02
+  rotate: true
+  xy: 186, 166
+  size: 76, 108
+  orig: 136, 136
+  offset: 28, 20
+  index: -1
+attack_n_03
+  rotate: true
+  xy: 296, 166
+  size: 76, 108
+  orig: 136, 136
+  offset: 24, 20
+  index: -1
+attack_n_04
+  rotate: false
+  xy: 96, 240
+  size: 88, 108
+  orig: 136, 136
+  offset: 28, 20
+  index: -1
+attack_n_05
+  rotate: true
+  xy: 406, 166
+  size: 76, 108
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+attack_s_01
+  rotate: true
+  xy: 622, 166
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+attack_s_02
+  rotate: false
+  xy: 928, 36
+  size: 76, 100
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+attack_s_03
+  rotate: true
+  xy: 728, 166
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+attack_s_04
+  rotate: false
+  xy: 546, 244
+  size: 84, 104
+  orig: 136, 136
+  offset: 24, 20
+  index: -1
+attack_s_05
+  rotate: true
+  xy: 834, 166
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+dash_01
+  rotate: false
+  xy: 632, 244
+  size: 84, 104
+  orig: 136, 136
+  offset: 24, 20
+  index: -1
+dash_02
+  rotate: false
+  xy: 2, 244
+  size: 92, 104
+  orig: 136, 136
+  offset: 16, 20
+  index: -1
+dash_03
+  rotate: false
+  xy: 186, 244
+  size: 88, 104
+  orig: 136, 136
+  offset: 20, 20
+  index: -1
+die_01
+  rotate: true
+  xy: 2, 162
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+hurt_01
+  rotate: true
+  xy: 2, 162
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+die_02
+  rotate: true
+  xy: 370, 10
+  size: 76, 96
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+die_03
+  rotate: true
+  xy: 276, 6
+  size: 80, 92
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+die_04
+  rotate: false
+  xy: 566, 2
+  size: 84, 84
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+die_05
+  rotate: true
+  xy: 186, 2
+  size: 84, 88
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+die_06
+  rotate: false
+  xy: 652, 6
+  size: 80, 80
+  orig: 136, 136
+  offset: 36, 20
+  index: -1
+hurt_02
+  rotate: false
+  xy: 940, 138
+  size: 76, 104
+  orig: 136, 136
+  offset: 20, 20
+  index: -1
+hurt_03
+  rotate: true
+  xy: 108, 88
+  size: 76, 104
+  orig: 136, 136
+  offset: 12, 20
+  index: -1
+idle_01
+  rotate: true
+  xy: 214, 88
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+idle_02
+  rotate: true
+  xy: 84, 10
+  size: 76, 100
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+idle_03
+  rotate: true
+  xy: 320, 88
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+jump_01
+  rotate: false
+  xy: 2, 64
+  size: 80, 96
+  orig: 136, 136
+  offset: 28, 24
+  index: -1
+jump_02
+  rotate: true
+  xy: 468, 10
+  size: 76, 96
+  orig: 136, 136
+  offset: 32, 24
+  index: -1
+jump_03
+  rotate: true
+  xy: 426, 88
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 24
+  index: -1
+jump_04
+  rotate: true
+  xy: 532, 88
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 24
+  index: -1
+jump_05
+  rotate: true
+  xy: 638, 88
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 24
+  index: -1
+run_01
+  rotate: false
+  xy: 276, 244
+  size: 88, 104
+  orig: 136, 136
+  offset: 20, 20
+  index: -1
+run_02
+  rotate: false
+  xy: 366, 244
+  size: 88, 104
+  orig: 136, 136
+  offset: 20, 20
+  index: -1
+run_03
+  rotate: false
+  xy: 718, 244
+  size: 84, 104
+  orig: 136, 136
+  offset: 24, 16
+  index: -1
+run_04
+  rotate: false
+  xy: 804, 244
+  size: 84, 104
+  orig: 136, 136
+  offset: 24, 16
+  index: -1
+run_05
+  rotate: true
+  xy: 744, 88
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+run_06
+  rotate: false
+  xy: 850, 60
+  size: 76, 104
+  orig: 136, 136
+  offset: 32, 20
+  index: -1
+run_07
+  rotate: false
+  xy: 456, 244
+  size: 88, 104
+  orig: 136, 136
+  offset: 20, 16
+  index: -1
+run_08
+  rotate: false
+  xy: 890, 244
+  size: 80, 104
+  orig: 136, 136
+  offset: 28, 16
+  index: -1
