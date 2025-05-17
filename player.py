@@ -50,6 +50,10 @@ class Player:
         self.orbit_attack_hit = False  # 防止多次判定
         self.orbit_trail_length = 8  # 剑影数量
         self.orbit_particles = []  # 粒子特效
+        self.attack_sound = pygame.mixer.Sound("assets/sound/hit.wav")
+        self.attack_sound.set_volume(0.5)
+        self.attack_none_sound = pygame.mixer.Sound("assets/sound/hitnone.wav")
+        self.attack_none_sound.set_volume(0.5)
     
     def _load_frames(self, action):
         img_dir = "assets/characters/player_frames"
@@ -127,6 +131,7 @@ class Player:
             self.attack_timer = current_time
             self.attack_last_time = current_time
             self.generate_attack_rect()  # 攻击时生成判定区域
+            # 不再在这里播放音效
             return True
         return False
 
@@ -311,3 +316,7 @@ class Player:
     @property
     def health_percent(self):
         return self.current_health / self.max_health 
+
+    def play_hit_sound(self):
+        if hasattr(self, 'attack_sound') and self.attack_sound:
+            self.attack_sound.play() 

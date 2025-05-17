@@ -62,7 +62,6 @@ def merged_on_boss_spawn():
 
 # Boss死亡特效触发函数
 def on_boss_dead(pos=None):
-    global weapon_drop
     if pos:
         bx, by = pos
     elif enemy_manager.boss:
@@ -73,8 +72,6 @@ def on_boss_dead(pos=None):
 
     print(f"触发Boss死亡特效，位置：({bx}, {by})")
     effect_manager.create_explosion((bx, by))
-    weapon_drop = WeaponDrop((bx, by))
-    print("Boss掉落了一把武器: swd2.png")
 
 # 小怪死亡特效触发函数
 def on_enemy_dead(pos):

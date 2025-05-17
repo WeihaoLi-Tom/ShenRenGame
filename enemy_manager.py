@@ -109,24 +109,26 @@ class EnemyManager:
     def check_attacks(self, attack_rect):
         """检查玩家攻击是否命中敌人或Boss"""
         hit = False
-        
         # 检查是否命中普通敌人
         for enemy in self.enemies:
             if enemy.alive and attack_rect.colliderect(enemy.rect):
                 enemy.take_damage(self.player.attack_damage)
                 print("命中敌人!")
                 hit = True
-                
+                # 命中时播放hit音效
+                if hasattr(self.player, 'play_hit_sound'):
+                    self.player.play_hit_sound()
                 # 检测敌人是否死亡，触发简化版的死亡特效
                 if not enemy.alive and hasattr(self, 'on_enemy_dead'):
                     self.on_enemy_dead(enemy.rect.center)
-        
         # 检查是否命中Boss
         if self.boss and self.boss.alive and attack_rect.colliderect(self.boss.rect):
             self.boss.take_damage(self.player.attack_damage)
             print(f"命中Boss! Boss血量: {self.boss.current_health}")
             hit = True
-            
+            # 命中时播放hit音效
+            if hasattr(self.player, 'play_hit_sound'):
+                self.player.play_hit_sound()
             # 检测Boss是否死亡，如果是，立即在正确位置触发特效并停止BGM
             if not self.boss.alive and hasattr(self, 'on_boss_dead') and self.on_boss_dead:
                 exact_pos = self.boss.death_position or self.boss.rect.center
@@ -138,7 +140,9 @@ class EnemyManager:
                 except Exception as e:
                     print(f"停止BGM时出错: {e}")
                 self.on_boss_dead = None  # 只触发一次
-            
+        # 未命中时播放hitnone音效
+        if not hit and hasattr(self.player, 'attack_none_sound') and self.player.attack_none_sound:
+            self.player.attack_none_sound.play()
         return hit
     
     def draw(self, surface, camera_x, camera_y, font=None, show_debug_hitbox=False):
