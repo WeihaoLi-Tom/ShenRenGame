@@ -15,7 +15,7 @@ class Player:
         self.rect = pygame.Rect(rect_x, rect_y, rect_w, rect_h)
         self.move_speed = 1.8
         self.max_health = 1000
-        self.current_health = 1000
+        self.current_health = 10
         self.is_dead = False
         self.attacking = False
         self.attack_timer = 0
@@ -87,6 +87,8 @@ class Player:
         return frames
 
     def move(self, keys, is_valid_position):
+        if self.is_dead:
+            return  # 死亡后不能移动
         old_x, old_y = self.rect.topleft
         self.is_moving = False
         
@@ -163,6 +165,13 @@ class Player:
         prev_action = self.action
         if self.is_dead:
             self.action = "death"
+            frames_list = self.frames.get("death")
+            if frames_list and self.frame_idx < len(frames_list) - 1:
+                self.frame_timer += 1/60
+                if self.frame_timer >= self.frame_interval:
+                    self.frame_timer = 0
+                    self.frame_idx += 1
+            return  # 死亡时不再处理其它状态
         elif self.attacking:
             self.action = "attack"
             if now - self.attack_timer >= self.attack_duration:
@@ -226,21 +235,25 @@ class Player:
             self.frame_idx = 0
 
     def draw(self, surface, camera_x, camera_y, show_debug_hitbox=False):
-        # 攻击动画也支持方向
-        if self.action == "attack":
-            if self.direction == "left":
-                action_key = "attack_right"
-            else:
-                action_key = f"attack_{self.direction}"
+        # 死亡时只用death动画帧
+        if self.action == "death":
+            frames_list = self.frames.get("death")
+            flip = False
         else:
-            action_key = f"{self.action}_{self.direction}"
-        frames_list = self.frames.get(action_key)
-        flip = False
-        if self.action == "attack" and self.direction == "left":
-            flip = True
-        elif not frames_list and self.direction == "left":
-            frames_list = self.frames.get(f"{self.action}_right")
-            flip = True
+            if self.action == "attack":
+                if self.direction == "left":
+                    action_key = "attack_right"
+                else:
+                    action_key = f"attack_{self.direction}"
+            else:
+                action_key = f"{self.action}_{self.direction}"
+            frames_list = self.frames.get(action_key)
+            flip = False
+            if self.action == "attack" and self.direction == "left":
+                flip = True
+            elif not frames_list and self.direction == "left":
+                frames_list = self.frames.get(f"{self.action}_right")
+                flip = True
         if not frames_list:
             frames_list = self.frames.get("idle_down")
         if not frames_list:
@@ -320,3 +333,9 @@ class Player:
     def play_hit_sound(self):
         if hasattr(self, 'attack_sound') and self.attack_sound:
             self.attack_sound.play() 
+
+    @property
+    def death_anim_finished(self):
+        # 死亡动画帧是否已到最后一帧
+        frames_list = self.frames.get("death")
+        return self.is_dead and frames_list and self.frame_idx == len(frames_list) - 1 

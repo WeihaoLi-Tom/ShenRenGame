@@ -84,6 +84,14 @@ enemy_manager.on_enemy_dead = on_enemy_dead
 
 show_debug_hitbox = False
 
+try:
+    gg_img = pygame.image.load("assets/title/gg.png").convert_alpha()
+except Exception as e:
+    gg_img = None
+    print("死亡图片加载失败:", e)
+
+gg_show_timer = 0  # 死亡动画结束后计时器
+
 running = True
 while running:
     # 计算delta time
@@ -266,6 +274,28 @@ while running:
         
         # 绘制玩家血条
         player.draw_health_bar(screen, 10, WINDOW_HEIGHT - 30, 200, 20)
+
+        # 死亡动画播放完后，渐变放大显示gg图片
+        if player.is_dead and gg_img:
+            if hasattr(player, 'death_anim_finished') and player.death_anim_finished:
+                gg_show_timer += delta_time
+                # 渐变参数
+                duration = 3 # 渐变持续时间（秒）
+                progress = min(gg_show_timer / duration, 1.0)
+                scale = 0.3 + 0.7 * progress  # 从0.3倍放大到1倍
+                alpha = int(255 * progress)   # 从0到255
+                # 缩放图片，最大不超过半屏
+                w, h = gg_img.get_size()
+                max_w = WINDOW_WIDTH // 1.5
+                max_h = WINDOW_HEIGHT // 1
+                new_w = min(int(w * scale), max_w)
+                new_h = min(int(h * scale), max_h)
+                gg_scaled = pygame.transform.smoothscale(gg_img, (new_w, new_h))
+                gg_scaled.set_alpha(alpha)
+                rect = gg_scaled.get_rect(center=(WINDOW_WIDTH//2, WINDOW_HEIGHT//2))
+                screen.blit(gg_scaled, rect)
+            else:
+                gg_show_timer = 0  # 死亡动画未播完，计时器归零
 
         # 自动保存逻辑
         if game_state_manager.update_auto_save():
