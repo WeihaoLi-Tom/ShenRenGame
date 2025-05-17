@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.10" tiledversion="1.11.2" orientation="orthogonal" renderorder="right-down" width="40" height="27" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="1">
- <tileset firstgid="1" source="C:/Users/Tom/Desktop/myactgame/Tiled/sampleSheet.tsx"/>
+ <tileset firstgid="1" source="sampleSheet.tsx"/>
  <layer id="1" name="Dungeon" width="40" height="27">
   <data encoding="csv">
 14,1610612787,16,1,1,3221225485,1,1,1,2,3,3,3,3,3,4,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0,

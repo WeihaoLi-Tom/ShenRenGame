@@ -700,7 +700,13 @@ class BossEnemy:
             for p in self.phase2_particles:
                 px = int(cx + math.cos(p['angle']) * p['radius'])
                 py = int(cy + math.sin(p['angle']) * p['radius'])
-                pygame.draw.circle(surface, p['color'], (px, py), 4)
+                color = p['color']
+                # 检查surface是否支持alpha
+                if surface.get_flags() & pygame.SRCALPHA:
+                    draw_color = color
+                else:
+                    draw_color = color[:3]
+                pygame.draw.circle(surface, draw_color, (px, py), 4)
             # 绘制动态光环
             t = pygame.time.get_ticks() / 1000.0
             for r in range(self.rect.width//2+8, self.rect.width+8, 6):

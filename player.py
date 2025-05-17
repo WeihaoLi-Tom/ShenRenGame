@@ -63,13 +63,13 @@ class Player:
         self.dash_sound = pygame.mixer.Sound("assets/sound/dash.wav")
         self.dash_sound.set_volume(0.3)
         self.walk_sound = pygame.mixer.Sound("assets/sound/walk.wav")
-        self.walk_sound.set_volume(0.2)
+        self.walk_sound.set_volume(0.3)
         self.walk_channel = None  # 用于控制走路音效的播放
         
         # 受伤音效
         try:
             self.hurt_sound = pygame.mixer.Sound("assets/sound/hurt_out.wav")
-            self.hurt_sound.set_volume(0.3)
+            self.hurt_sound.set_volume(0.1)
             print("受伤音效加载成功")
         except Exception as e:
             print(f"受伤音效初始化失败: {e}")
@@ -191,22 +191,34 @@ class Player:
         attack_distance = 30
         attack_width = self.tile_width * 1.5
         attack_height = self.tile_height * 1.5
-        # 简单用左右方向判定
-        if self.facing_left:
-            # 向左攻击
+
+        if self.direction == "left":
             self.attack_rect = pygame.Rect(
                 self.rect.left - attack_distance,
                 self.rect.centery - attack_height // 2,
                 attack_distance,
                 attack_height
             )
-        else:
-            # 向右攻击
+        elif self.direction == "right":
             self.attack_rect = pygame.Rect(
                 self.rect.right,
                 self.rect.centery - attack_height // 2,
                 attack_distance,
                 attack_height
+            )
+        elif self.direction == "up":
+            self.attack_rect = pygame.Rect(
+                self.rect.centerx - attack_width // 2,
+                self.rect.top - attack_distance,
+                attack_width,
+                attack_distance
+            )
+        elif self.direction == "down":
+            self.attack_rect = pygame.Rect(
+                self.rect.centerx - attack_width // 2,
+                self.rect.bottom,
+                attack_width,
+                attack_distance
             )
 
     def update(self):
