@@ -1,6 +1,7 @@
 import random
 from enemy import Enemy, BossEnemy
 import pygame
+from weapon_drop import WeaponDrop
 
 class EnemyManager:
     def __init__(self, map_manager, player):
@@ -15,6 +16,7 @@ class EnemyManager:
         self.boss_spawn_threshold = 2  # 杀死5个小敌人后生成Boss
         self.boss_spawned = False
         self.on_boss_spawn = None  # Boss出现回调
+        self.weapon_drop = None  # 添加武器掉落物属性
         
         # 初始生成2只幽灵
         self.spawn_initial_enemies()
@@ -113,34 +115,31 @@ class EnemyManager:
         for enemy in self.enemies:
             if enemy.alive and attack_rect.colliderect(enemy.rect):
                 enemy.take_damage(self.player.attack_damage)
-                print("命中敌人!")
                 hit = True
-                # 命中时播放hit音效
                 if hasattr(self.player, 'play_hit_sound'):
                     self.player.play_hit_sound()
-                # 检测敌人是否死亡，触发简化版的死亡特效
                 if not enemy.alive and hasattr(self, 'on_enemy_dead'):
                     self.on_enemy_dead(enemy.rect.center)
         # 检查是否命中Boss
         if self.boss and self.boss.alive and attack_rect.colliderect(self.boss.rect):
             self.boss.take_damage(self.player.attack_damage)
-            print(f"命中Boss! Boss血量: {self.boss.current_health}")
             hit = True
-            # 命中时播放hit音效
             if hasattr(self.player, 'play_hit_sound'):
                 self.player.play_hit_sound()
-            # 检测Boss是否死亡，如果是，立即在正确位置触发特效并停止BGM
-            if not self.boss.alive and hasattr(self, 'on_boss_dead') and self.on_boss_dead:
-                exact_pos = self.boss.death_position or self.boss.rect.center
-                self.on_boss_dead(exact_pos)
-                # 停止BGM
-                try:
-                    pygame.mixer.music.fadeout(2000)  # 淡出音乐2秒
-                    print("Boss死亡，停止BGM")
-                except Exception as e:
-                    print(f"停止BGM时出错: {e}")
-                self.on_boss_dead = None  # 只触发一次
-        # 未命中时播放hitnone音效
+            if not self.boss.alive:
+                if hasattr(self, 'on_boss_dead') and self.on_boss_dead:
+                    exact_pos = self.boss.death_position or self.boss.rect.center
+                    self.on_boss_dead(exact_pos)
+                    try:
+                        self.weapon_drop = WeaponDrop(exact_pos, "assets/weapon/maoluan.png")
+                    except Exception as e:
+                        pass
+                    try:
+                        pygame.mixer.music.fadeout(2000)
+                    except Exception as e:
+                        pass
+                    self.on_boss_dead = None
+                    return hit
         if not hit and hasattr(self.player, 'attack_none_sound') and self.player.attack_none_sound:
             self.player.attack_none_sound.play()
         return hit

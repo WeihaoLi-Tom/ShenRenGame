@@ -94,6 +94,17 @@ class Player:
         self.death_channel = None  # 专用于死亡音效的声道
         self.dash_trail = []  # 拖尾记录（x, y, t）
         self.is_valid_position = is_valid_position  # 保存碰撞检测函数
+        
+        # 变身相关
+        self.has_maoluan = False  # 是否拥有耄耋之卵
+        self.transformed = False  # 是否处于变身状态
+        self.transform_frames = {}  # 变身后的动画帧
+        # 变身动画相关
+        self.is_transforming = False  # 是否正在播放变身动画
+        self.transform_anim_frames = self._load_bianshen_frames()
+        self.transform_anim_idx = 0
+        self.transform_anim_timer = 0
+        self.transform_anim_interval = 0.08  # 变身动画帧间隔
     
     def _load_frames(self, action):
         img_dir = "assets/characters/player_frames"
@@ -124,6 +135,69 @@ class Player:
         frames["attack_up"] = self._load_frames("attack_up")
         # death
         frames["death"] = self._load_frames("death")
+        return frames
+
+    def _load_transform_frames(self):
+        """加载变身后的角色动画帧"""
+        frames = {}
+        base_dir = "assets/characters/transform"
+        # 加载idle动画
+        frames["idle_down"] = self._load_dir_frames(f"{base_dir}/idle")
+        frames["idle_right"] = frames["idle_down"]  # 共用相同动画
+        frames["idle_up"] = frames["idle_down"]  # 共用相同动画
+        
+        # 加载move动画
+        frames["move_down"] = self._load_dir_frames(f"{base_dir}/move")
+        frames["move_right"] = frames["move_down"]  # 共用相同动画
+        frames["move_up"] = frames["move_down"]  # 共用相同动画
+        
+        # 加载attack动画
+        frames["attack_down"] = self._load_dir_frames(f"{base_dir}/attack")
+        frames["attack_right"] = frames["attack_down"]  # 共用相同动画 
+        frames["attack_up"] = frames["attack_down"]  # 共用相同动画
+        
+        # 加载其他动画
+        frames["death"] = self._load_dir_frames(f"{base_dir}/die")
+        frames["hurt"] = self._load_dir_frames(f"{base_dir}/hurt")
+        frames["dash"] = self._load_dir_frames(f"{base_dir}/dash")
+        
+        return frames
+    
+    def _load_dir_frames(self, dir_path):
+        """从目录加载所有png文件作为动画帧"""
+        frames = []
+        try:
+            if not os.path.exists(dir_path):
+                print(f"警告: 目录不存在 {dir_path}")
+                return frames
+                
+            files = sorted([f for f in os.listdir(dir_path) if f.endswith('.png')])
+            for file in files:
+                fpath = os.path.join(dir_path, file)
+                try:
+                    frames.append(pygame.image.load(fpath).convert_alpha())
+                except Exception as e:
+                    print(f"加载帧失败 {fpath}: {e}")
+        except Exception as e:
+            print(f"加载目录失败 {dir_path}: {e}")
+        return frames
+
+    def _load_bianshen_frames(self):
+        frames = []
+        dir_path = "assets/characters/transform/bianshen"
+        try:
+            if not os.path.exists(dir_path):
+                print(f"警告: 变身动画目录不存在 {dir_path}")
+                return frames
+            files = sorted([f for f in os.listdir(dir_path) if f.endswith('.png')])
+            for file in files:
+                fpath = os.path.join(dir_path, file)
+                try:
+                    frames.append(pygame.image.load(fpath).convert_alpha())
+                except Exception as e:
+                    print(f"加载变身动画帧失败 {fpath}: {e}")
+        except Exception as e:
+            print(f"加载变身动画目录失败 {dir_path}: {e}")
         return frames
 
     def move(self, keys, is_valid_position):
@@ -220,9 +294,24 @@ class Player:
     def update(self):
         now = time.time()
         prev_action = self.action
+        # 变身动画流程
+        if self.is_transforming:
+            self.action = "bianshen"
+            if self.transform_anim_idx < len(self.transform_anim_frames) - 1:
+                self.transform_anim_timer += 1/60
+                if self.transform_anim_timer >= self.transform_anim_interval:
+                    self.transform_anim_timer = 0
+                    self.transform_anim_idx += 1
+            else:
+                # 动画播放完毕，切换到变身状态
+                self.is_transforming = False
+                self.transformed = not self.transformed
+                self.frame_idx = 0
+            return
         if self.is_dead:
             self.action = "death"
-            frames_list = self.frames.get("death")
+            # 使用当前状态对应的帧集合
+            frames_list = self.transform_frames.get("death") if self.transformed else self.frames.get("death")
             
             # 确保死亡音效播放
             if not self.death_sound_played and hasattr(self, 'death_sound') and self.death_sound:
@@ -243,6 +332,7 @@ class Player:
             if self.walk_channel and self.walk_channel.get_busy():
                 self.walk_channel.stop()
             return  # 死亡时不再处理其它状态
+            
         # 冲刺逻辑
         if self.is_dashing:
             if self.walk_channel and self.walk_channel.get_busy():
@@ -264,9 +354,25 @@ class Player:
                 if not self.is_valid_position(self.rect.centerx, self.rect.centery):
                     self.rect.x, self.rect.y = old_x, old_y
                     break
-                self.dash_trail.append((self.rect.x, self.rect.y, time.time()))
-            self.dash_trail = [t for t in self.dash_trail if now - t[2] < 0.2]
-            self.action = "move"
+                # 只在非变身状态下记录拖尾
+                if not self.transformed:
+                    self.dash_trail.append((self.rect.x, self.rect.y, time.time()))
+            # 只在非变身状态下更新拖尾
+            if not self.transformed:
+                self.dash_trail = [t for t in self.dash_trail if now - t[2] < 0.2]
+                
+            # 变身状态下使用专用dash动画
+            if self.transformed and "dash" in self.transform_frames:
+                self.action = "dash"
+                # 确保dash动画能完整播放
+                dash_frames = self.transform_frames.get("dash", [])
+                if dash_frames:
+                    # 计算基于当前冲刺经过时间的帧索引
+                    dash_progress = (now - self.dash_timer) / self.dash_duration
+                    self.frame_idx = min(int(dash_progress * len(dash_frames)), len(dash_frames) - 1)
+            else:
+                self.action = "move"
+                
             self.is_moving = True
             if now - self.dash_timer >= self.dash_duration:
                 self.is_dashing = False
@@ -295,11 +401,17 @@ class Player:
                 action_key = f"attack_{self.direction}"
         else:
             action_key = f"{self.action}_{self.direction}"
-        frames_list = self.frames.get(action_key)
+            
+        # 根据变身状态选择帧集合
+        frames_dict = self.transform_frames if self.transformed else self.frames
+        
+        frames_list = frames_dict.get(action_key)
         if not frames_list and self.direction == "left" and self.action != "attack":
-            frames_list = self.frames.get(f"{self.action}_right")
+            frames_list = frames_dict.get(f"{self.action}_right")
         if not frames_list:
-            frames_list = self.frames.get("idle_down")
+            frames_list = frames_dict.get("idle_down")
+        if not frames_list:
+            return
         self.frame_timer += 1/60
         if self.frame_timer >= self.frame_interval:
             self.frame_timer = 0
@@ -378,32 +490,52 @@ class Player:
             self.frame_idx = 0
 
     def draw(self, surface, camera_x, camera_y, show_debug_hitbox=False):
-        # dash拖尾特效
-        for tx, ty, t in self.dash_trail:
-            if self.action == "attack":
-                if self.direction == "left":
-                    action_key = "attack_right"
+        # 变身动画优先播放
+        if self.is_transforming and self.transform_anim_frames:
+            frame = self.transform_anim_frames[self.transform_anim_idx]
+            frame_width, frame_height = frame.get_size()
+            draw_x = self.rect.centerx - frame_width // 2
+            offset = 20
+            draw_y = self.rect.bottom - frame_height + offset
+            surface.blit(frame, (draw_x - camera_x, draw_y - camera_y))
+            return
+        # 选择当前状态的帧集合
+        frames_dict = self.transform_frames if self.transformed else self.frames
+        
+        # dash拖尾特效 - 只在非变身状态下显示
+        if not self.transformed:
+            for tx, ty, t in self.dash_trail:
+                if self.action == "attack":
+                    if self.direction == "left":
+                        action_key = "attack_right"
+                    else:
+                        action_key = f"attack_{self.direction}"
                 else:
-                    action_key = f"attack_{self.direction}"
-            else:
-                action_key = f"move_{self.direction}"
-            frames_list = self.frames.get(action_key)
-            if not frames_list and self.direction == "left" and self.action != "attack":
-                frames_list = self.frames.get(f"move_right")
-            if not frames_list:
-                frames_list = self.frames.get("idle_down")
-            frame = frames_list[self.frame_idx % len(frames_list)]
-            alpha = int(120 * (1 - (time.time() - t) / 0.2))
-            trail_img = frame.copy()
-            trail_img.set_alpha(alpha)
-            # 关键：用和本体一样的偏移
-            draw_x = tx - (48 - self.rect.width) // 2
-            draw_y = ty - (48 - self.rect.height)
-            surface.blit(trail_img, (draw_x - camera_x, draw_y - camera_y))
+                    action_key = f"move_{self.direction}"
+                
+                frames_list = frames_dict.get(action_key)
+                if not frames_list and self.direction == "left" and self.action != "attack":
+                    frames_list = frames_dict.get(f"move_right")
+                if not frames_list:
+                    frames_list = frames_dict.get("idle_down")
+                if frames_list:  # 确保帧列表存在
+                    frame = frames_list[self.frame_idx % len(frames_list)]
+                    alpha = int(120 * (1 - (time.time() - t) / 0.2))
+                    trail_img = frame.copy()
+                    trail_img.set_alpha(alpha)
+                    # 关键：用和本体一样的偏移
+                    draw_x = tx - (48 - self.rect.width) // 2
+                    draw_y = ty - (48 - self.rect.height)
+                    surface.blit(trail_img, (draw_x - camera_x, draw_y - camera_y))
+        
         # 死亡时只用death动画帧
-        if self.action == "death":
-            frames_list = self.frames.get("death")
+        if self.is_dead:
+            frames_list = frames_dict.get("death")
             flip = False
+        # 变身时使用专用dash动画
+        elif self.action == "dash" and self.transformed and "dash" in frames_dict:
+            frames_list = frames_dict.get("dash")
+            flip = self.direction == "left"
         else:
             if self.action == "attack":
                 if self.direction == "left":
@@ -412,34 +544,51 @@ class Player:
                     action_key = f"attack_{self.direction}"
             else:
                 action_key = f"{self.action}_{self.direction}"
-            frames_list = self.frames.get(action_key)
+            frames_list = frames_dict.get(action_key)
             flip = False
             if self.action == "attack" and self.direction == "left":
                 flip = True
             elif not frames_list and self.direction == "left":
-                frames_list = self.frames.get(f"{self.action}_right")
+                frames_list = frames_dict.get(f"{self.action}_right")
                 flip = True
+                
         if not frames_list:
-            frames_list = self.frames.get("idle_down")
+            frames_list = frames_dict.get("idle_down")
         if not frames_list:
             return
         idx = min(self.frame_idx, len(frames_list)-1)
         frame = frames_list[idx]
         if flip:
             frame = pygame.transform.flip(frame, True, False)
-        draw_x = self.rect.x - (48 - self.rect.width) // 2
-        draw_y = self.rect.y - (48 - self.rect.height)
-        # 新增：无敌时闪烁
+
+        # 获取角色绘制偏移量
+        frame_width, frame_height = frame.get_size()
+        
+        if self.transformed:
+            # 水平居中于碰撞体
+            draw_x = self.rect.centerx - frame_width // 2
+            # 角色底部与碰撞体底部对齐
+            offset = 20  # 你可以调整为10、15、25等，直到满意为止
+            draw_y = self.rect.bottom - frame_height + offset
+        else:
+            # 原始角色的位置计算
+            draw_x = self.rect.x - (frame_width - self.rect.width) // 2
+            draw_y = self.rect.y - (frame_height - self.rect.height)
+        
+        # 无敌时闪烁
         visible = True
         if self.invincible and not self.is_dashing:
             visible = int(time.time() * 10) % 2 == 0
         if visible:
             surface.blit(frame, (draw_x - camera_x, draw_y - camera_y))
+            
         # 只在show_debug_hitbox为True时绘制碰撞体和攻击范围
         if show_debug_hitbox:
+            # 绘制碰撞体
             collision_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
             pygame.draw.rect(collision_surface, (255, 0, 0, 128), collision_surface.get_rect())
             surface.blit(collision_surface, (self.rect.x - camera_x, self.rect.y - camera_y))
+            
             margin = 4
             for y in range(self.rect.top + margin, self.rect.bottom - margin, 4):
                 pygame.draw.circle(surface, (0, 255, 0), (self.rect.left + margin - camera_x, y - camera_y), 1)
@@ -532,3 +681,22 @@ class Player:
                 except Exception as e:
                     print(f"播放冲刺音效失败: {e}")
                     self.dash_sound.play() 
+
+    def equip_new_sword(self, img_path):
+        """
+        装备新武器，如果是耄耋之卵则获得变身能力
+        """
+        if img_path == "assets/weapon/maoluan.png":
+            self.has_maoluan = True
+            # 加载变身动画帧
+            self.transform_frames = self._load_transform_frames()
+            print("获得了耄耋之卵，按L键可以变身！")
+    
+    def toggle_transform(self):
+        """切换变身状态，先播放变身动画"""
+        if self.has_maoluan and not self.is_dead and not self.is_transforming:
+            self.is_transforming = True
+            self.transform_anim_idx = 0
+            self.transform_anim_timer = 0
+            return True
+        return False 

@@ -38,13 +38,13 @@ def load_animation_frames(folder_path):
 
 # 加载动画
 print("开始加载动画帧...")
-idel_frames = load_animation_frames('assets/characters/test_frames/idel')
-move_frames = load_animation_frames('assets/characters/test_frames/move')
-attack_frames = load_animation_frames('assets/characters/test_frames/attack')
-hurt_frames = load_animation_frames('assets/characters/test_frames/hurt')
-death_frames = load_animation_frames('assets/characters/test_frames/die')
-dash_frames = load_animation_frames('assets/characters/test_frames/dash')
-skill_frames = load_animation_frames('assets/characters/test_frames/skill')  # 新增skill动画
+idel_frames = load_animation_frames('assets/characters/transform/idle')
+move_frames = load_animation_frames('assets/characters/transform/move')
+attack_frames = load_animation_frames('assets/characters/transform/attack')
+hurt_frames = load_animation_frames('assets/characters/transform/hurt')
+death_frames = load_animation_frames('assets/characters/transform/die')
+dash_frames = load_animation_frames('assets/characters/transform/dash')
+skill_frames = load_animation_frames('assets/characters/transform/skill')  # 新增skill动画
 
 # 检查是否成功加载了动画帧
 if not idel_frames or not move_frames or not attack_frames or not hurt_frames or not death_frames or not dash_frames or not skill_frames:

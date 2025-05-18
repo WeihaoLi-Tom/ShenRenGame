@@ -52,7 +52,7 @@ ui_manager = UIManager(WINDOW_WIDTH, WINDOW_HEIGHT)
 audio_manager = AudioManager()
 
 # 全局变量
-weapon_drop = None
+# weapon_drop = None  # 武器掉落物（改为使用enemy_manager.weapon_drop）
 last_time = time.time()
 
 # 新增：批量碰撞体编辑相关变量
@@ -83,9 +83,11 @@ def on_enemy_dead(pos):
     effect_manager.create_small_explosion(pos)
 
 # 注册回调
+print("正在注册Boss相关回调...")
 enemy_manager.on_boss_spawn = merged_on_boss_spawn
 enemy_manager.on_boss_dead = on_boss_dead
 enemy_manager.on_enemy_dead = on_enemy_dead
+print("Boss相关回调注册完成")
 
 show_debug_hitbox = False
 
@@ -114,21 +116,29 @@ while running:
                 game_state_manager.toggle_pause()
             elif game_state_manager.current_state == GameState.RUNNING:
                 if event.key == pygame.K_f:  # F键只用于拾取武器
-                    if weapon_drop and weapon_drop.rect.collidepoint(player.rect.center):
-                        player.equip_new_sword("assets/weapon/swd2.png")
-                        print("玩家拾取了新武器!")
-                        weapon_drop = None
+                    if enemy_manager.weapon_drop and enemy_manager.weapon_drop.rect.collidepoint(player.rect.center):
+                        if enemy_manager.weapon_drop.image_path == "assets/weapon/maoluan.png":
+                            player.equip_new_sword("assets/weapon/maoluan.png")
+                            print("玩家拾取了耄耋之卵!")
+                        else:
+                            player.equip_new_sword("assets/weapon/swd2.png")
+                            print("玩家拾取了新武器!")
+                        enemy_manager.weapon_drop = None
                 elif event.key == pygame.K_TAB:
                     game_state_manager.toggle_debug_display()
                 elif event.key == pygame.K_c:
                     game_state_manager.toggle_collision_display()
                 elif event.key == pygame.K_k:
                     player.dash()
+                elif event.key == pygame.K_l:
+                    if player.toggle_transform():
+                        game_state_manager.console_tip = "变身状态切换！"
+                        game_state_manager.console_tip_timer = time.time()
                 # 开发者控制台按键
                 elif game_state_manager.is_developer_mode():
-                    if event.key == pygame.K_1:  # 按1生成swd2
-                        weapon_drop = WeaponDrop(player.rect.center)
-                        game_state_manager.console_tip = "已生成swd2"
+                    if event.key == pygame.K_F1:  # 按F1生成耄耋之卵
+                        enemy_manager.weapon_drop = WeaponDrop(player.rect.center, "assets/weapon/maoluan.png")
+                        game_state_manager.console_tip = "已生成耄耋之卵"
                         game_state_manager.console_tip_timer = time.time()
                     elif event.key == pygame.K_o:
                         show_debug_hitbox = not show_debug_hitbox
@@ -250,10 +260,10 @@ while running:
         enemy_manager.draw(visible_area, camera_x, camera_y, ui_manager.font, show_debug_hitbox)
         
         # 绘制武器掉落物
-        if weapon_drop:
-            weapon_drop.update()
-            weapon_drop.draw(visible_area, camera_x, camera_y)
-            weapon_drop.draw_pickup_prompt(visible_area, camera_x, camera_y, player.rect.center,ui_manager.font)
+        if enemy_manager.weapon_drop:
+            enemy_manager.weapon_drop.update()
+            enemy_manager.weapon_drop.draw(visible_area, camera_x, camera_y)
+            enemy_manager.weapon_drop.draw_pickup_prompt(visible_area, camera_x, camera_y, player.rect.center, ui_manager.font)
         
         # 绘制玩家
         player.draw(visible_area, camera_x, camera_y, show_debug_hitbox)

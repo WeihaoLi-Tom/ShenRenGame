@@ -5,6 +5,7 @@ class WeaponDrop:
     def __init__(self, pos, img_path="assets/weapon/swd2.png"):
         self.pos = pos
         self.rect = pygame.Rect(pos[0]-16, pos[1]-16, 32, 32)
+        self.image_path = img_path  # 保存图片路径
         try:
             self.image = pygame.image.load(img_path).convert_alpha()
             self.image = pygame.transform.scale(self.image, (32, 32))
@@ -34,7 +35,9 @@ class WeaponDrop:
         # 绘制光环
         glow_surf = pygame.Surface((48, 48), pygame.SRCALPHA)
         pygame.draw.circle(glow_surf, (255, 215, 0, self.glow_alpha), (24, 24), 20)
-        surface.blit(glow_surf, (self.pos[0] - camera_x - 24, self.pos[1] - camera_y - 24 + self.hover_offset))
+        draw_x = self.pos[0] - camera_x - 24
+        draw_y = self.pos[1] - camera_y - 24 + self.hover_offset
+        surface.blit(glow_surf, (draw_x, draw_y))
         
         # 绘制旋转后的武器图像
         angle = (time.time() - self.birth_time) * 20 % 360
@@ -50,7 +53,7 @@ class WeaponDrop:
         if ((px - wx) ** 2 + (py - wy) ** 2) ** 0.5 < pickup_distance:
             # 用传入的小号font渲染中文
             small_font = pygame.font.Font(font.get_name(), 8) if hasattr(font, 'get_name') else font
-            pickup_text = small_font.render("按F拾取耄耋之剑！", True, (255, 255, 255))
+            pickup_text = small_font.render("按F拾取耄耋之卵！", True, (255, 255, 255))
             scale = 0.7  # 比如70%
             pickup_text = pygame.transform.smoothscale(pickup_text, (int(pickup_text.get_width()*scale), int(pickup_text.get_height()*scale)))
             text_x = wx - camera_x - pickup_text.get_width() // 2
