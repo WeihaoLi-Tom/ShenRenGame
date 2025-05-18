@@ -83,8 +83,8 @@ class Player:
         rect_y = spawn_pos[1] + (sprite_h - rect_h)
         self.rect = pygame.Rect(rect_x, rect_y, rect_w, rect_h)
         self.move_speed = 1.8
-        self.max_health = 200
-        self.current_health = 200
+        self.max_health = 1000
+        self.current_health = 1000
         self.is_dead = False
         self.attacking = False
         self.attack_timer = 0
@@ -108,7 +108,7 @@ class Player:
         self.camera_y = 0  # 相机Y偏移
         # 攻击相关属性
         self.attack_range = self.tile_width  # 攻击范围
-        self.base_attack_damage = 100
+        self.base_attack_damage = 15
         self.attack_damage = self.base_attack_damage
         self.attack_rect = pygame.Rect(0, 0, 0, 0)  # 恢复attack_rect属性
         self.invincible = False
@@ -923,17 +923,34 @@ class Player:
             self.skill_timer = 0
             self.skill_bullet_fired = False
             self.skill_last_time = now  # 记录释放时间
+            
+            # 更稳定的音效播放逻辑
+            print(f"[DEBUG] 技能释放，准备播放音效")
             try:
+                # 使用专用频道播放技能音效，避免与其它音效冲突
+                channel = pygame.mixer.Channel(3)
+                channel.stop()  # 停止当前在频道3上播放的音效
+                channel.set_volume(0.8)  # 稍微调高音量确保能听到
+                # 优先使用audio_manager
                 if hasattr(self, 'audio_manager') and self.audio_manager:
-                    print("[DEBUG] 调用audio_manager播放技能音效")
+                    print(f"[DEBUG] 使用audio_manager播放fireskill音效")
                     self.audio_manager.play_sound(SoundCategory.COMBAT, "fireskill")
+                    # 备用方案：同时使用频道直接播放
+                    channel.play(self.fireskill_sound)
                 else:
-                    print("[DEBUG] 直接播放self.fireskill_sound")
-                    self.fireskill_sound.play()
+                    print(f"[DEBUG] 直接使用频道播放fireskill音效")
+                    channel.play(self.fireskill_sound)
             except Exception as e:
-                print(f"播放技能音效失败: {e}")
+                print(f"[ERROR] 播放技能音效失败: {e}")
+                # 最后尝试：直接播放
+                try:
+                    self.fireskill_sound.play()
+                    print("[DEBUG] 回退到直接播放fireskill_sound")
+                except Exception as e2:
+                    print(f"[ERROR] 直接播放也失败: {e2}")
+            
             return True
-        return False 
+        return False
    
     def set_enemies(self, enemies):
         """更新敌人列表"""

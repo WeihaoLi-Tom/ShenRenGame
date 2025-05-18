@@ -11,6 +11,7 @@ from weapon_drop import WeaponDrop
 from game_state import GameState, GameStateManager
 from ui_manager import UIManager
 from audio_manager import AudioManager, SoundCategory
+from menu import GameMenu  # 导入新添加的菜单模块
 
 # 初始化
 pygame.init()
@@ -23,6 +24,13 @@ WINDOW_WIDTH, WINDOW_HEIGHT = 800, 600
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
 pygame.display.set_caption("Tom's Dungeon")
 clock = pygame.time.Clock()
+
+# 显示主菜单
+menu = GameMenu(WINDOW_WIDTH, WINDOW_HEIGHT)
+start_game = menu.run(screen)
+
+# 如果玩家选择了退出，menu.run会调用sys.exit()
+# 所以只有当玩家选择"开始游戏"时，才会继续下面的代码
 
 # 初始化各个管理器
 try:
@@ -177,7 +185,29 @@ while running:
             elif game_state_manager.current_state == GameState.RUNNING:
                 if event.key == pygame.K_f:  # F键只用于拾取武器
                     if enemy_manager.weapon_drop and enemy_manager.weapon_drop.rect.collidepoint(player.rect.center):
-                        audio_manager.play_sound(SoundCategory.UI, "pickup")
+                        # 更稳定的拾取音效播放机制
+                        print("[DEBUG] 触发拾取音效")
+                        try:
+                            # 使用专用频道2播放拾取音效
+                            channel = pygame.mixer.Channel(2)
+                            channel.stop()
+                            channel.set_volume(0.6)
+                            
+                            # 双重保险：同时使用audio_manager和直接播放
+                            audio_manager.play_sound(SoundCategory.UI, "pickup")
+                            if pickup_sound:
+                                channel.play(pickup_sound)
+                                print("[DEBUG] 直接通过频道2播放pickup音效")
+                        except Exception as e:
+                            print(f"[ERROR] 拾取音效播放失败: {e}")
+                            # 最后尝试直接播放
+                            if pickup_sound:
+                                try:
+                                    pickup_sound.play()
+                                    print("[DEBUG] 回退到直接播放pickup_sound")
+                                except Exception as e2:
+                                    print(f"[ERROR] 直接播放也失败: {e2}")
+                        
                         if enemy_manager.weapon_drop.image_path == "assets/weapon/maoluan.png":
                             player.equip_new_sword("assets/weapon/maoluan.png")
                             print("玩家拾取了耄耋之卵!")
