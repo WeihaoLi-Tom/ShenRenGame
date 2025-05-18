@@ -1,6 +1,8 @@
 import pygame
 import sys
 import time
+import os
+import math
 from player import Player
 from map_manager import MapManager
 from enemy_manager import EnemyManager
@@ -8,7 +10,7 @@ from effects import EffectManager
 from weapon_drop import WeaponDrop
 from game_state import GameState, GameStateManager
 from ui_manager import UIManager
-from audio_manager import AudioManager
+from audio_manager import AudioManager, SoundCategory
 
 # 初始化
 pygame.init()
@@ -51,6 +53,7 @@ effect_manager = EffectManager()
 game_state_manager = GameStateManager()
 ui_manager = UIManager(WINDOW_WIDTH, WINDOW_HEIGHT)
 audio_manager = AudioManager()
+player.audio_manager = audio_manager  # 设置player的audio_manager引用
 
 # 全局变量
 # weapon_drop = None  # 武器掉落物（改为使用enemy_manager.weapon_drop）
@@ -100,6 +103,55 @@ except Exception as e:
 
 gg_show_timer = 0  # 死亡动画结束后计时器
 
+# 在初始化部分加载dashicon.png
+try:
+    dash_icon_path = os.path.join("assets", "icon", "dashicon.png")
+    dash_icon = pygame.image.load(dash_icon_path).convert_alpha()
+except Exception as e:
+    dash_icon = None
+    print("Dash图标加载失败:", e)
+
+# 在初始化部分加载base.png
+try:
+    base_icon_path = os.path.join("assets", "icon", "base.png")
+    base_icon = pygame.image.load(base_icon_path).convert_alpha()
+except Exception as e:
+    base_icon = None
+    print("Base图标加载失败:", e)
+
+# 在初始化部分加载attackicon.png
+try:
+    attack_icon_path = os.path.join("assets", "icon", "attackicon.png")
+    attack_icon = pygame.image.load(attack_icon_path).convert_alpha()
+except Exception as e:
+    attack_icon = None
+    print("Attack图标加载失败:", e)
+
+# 在初始化部分加载bsicon.png
+try:
+    bs_icon_path = os.path.join("assets", "icon", "bsicon.png")
+    bs_icon = pygame.image.load(bs_icon_path).convert_alpha()
+except Exception as e:
+    bs_icon = None
+    print("变身图标加载失败:", e)
+
+# 在初始化部分加载skillicon.png
+try:
+    skill_icon_path = os.path.join("assets", "icon", "skillicon1.png")
+    skill_icon = pygame.image.load(skill_icon_path).convert_alpha()
+except Exception as e:
+    skill_icon = None
+    print("技能图标加载失败:", e)
+
+# 在初始化部分加载pickup.wav
+try:
+    pickup_sound_path = os.path.join("assets", "sound", "pickup.wav")
+    pickup_sound = pygame.mixer.Sound(pickup_sound_path)
+    pickup_sound.set_volume(0.5)
+except Exception as e:
+    pickup_sound = None
+    print("拾取音效加载失败:", e)
+
 running = True
 while running:
     # 计算delta time
@@ -107,6 +159,13 @@ while running:
     delta_time = current_time - last_time
     last_time = current_time
     
+    # 技能按钮通用参数（每帧都重新计算，防止窗口尺寸变化导致坐标错误）
+    icon_size = 48
+    gap = 18
+    base_size = icon_size + 12
+    base_offset = 6
+    y_pos = WINDOW_HEIGHT - icon_size - 20
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             if game_state_manager.collision_modified:
@@ -118,6 +177,7 @@ while running:
             elif game_state_manager.current_state == GameState.RUNNING:
                 if event.key == pygame.K_f:  # F键只用于拾取武器
                     if enemy_manager.weapon_drop and enemy_manager.weapon_drop.rect.collidepoint(player.rect.center):
+                        audio_manager.play_sound(SoundCategory.UI, "pickup")
                         if enemy_manager.weapon_drop.image_path == "assets/weapon/maoluan.png":
                             player.equip_new_sword("assets/weapon/maoluan.png")
                             print("玩家拾取了耄耋之卵!")
@@ -300,6 +360,106 @@ while running:
         # 绘制玩家血条
         player.draw_health_bar(screen, 10, WINDOW_HEIGHT - 30, 200, 20)
 
+        # L键（变身）
+        if hasattr(player, 'has_maoluan') and player.has_maoluan and bs_icon:
+            x_bs = WINDOW_WIDTH - icon_size*3 - gap*2 - 20
+            if base_icon:
+                scaled_base = pygame.transform.smoothscale(base_icon, (base_size, base_size))
+                screen.blit(scaled_base, (x_bs - base_offset, y_pos - base_offset))
+            scaled_icon = pygame.transform.smoothscale(bs_icon, (icon_size, icon_size))
+            screen.blit(scaled_icon, (x_bs, y_pos))
+            # 冷却扇形遮罩
+            remain, total = player.get_transform_cooldown_info()
+            if not player.transformed and remain > 0 and total > 0:
+                ratio = remain / total
+                mask_surf = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
+                center = (icon_size // 2, icon_size // 2)
+                radius = icon_size // 2
+                start_angle = -90
+                end_angle = start_angle + int(360 * ratio)
+                points = [center]
+                steps = max(6, int(60 * ratio))
+                for i in range(steps+1):
+                    angle = math.radians(start_angle + (end_angle - start_angle) * i / steps)
+                    x = center[0] + radius * math.cos(angle)
+                    y = center[1] + radius * math.sin(angle)
+                    points.append((x, y))
+                pygame.draw.polygon(mask_surf, (0, 0, 0, 120), points)
+                screen.blit(mask_surf, (x_bs, y_pos))
+            font = pygame.font.Font(None, 28)
+            l_text = font.render("L", True, (180, 255, 80))
+            l_rect = l_text.get_rect(bottomright=(x_bs + icon_size - 4, y_pos + icon_size - 2))
+            l_bg = pygame.Surface((l_rect.width+6, l_rect.height+2), pygame.SRCALPHA)
+            l_bg.fill((0,0,0,120))
+            screen.blit(l_bg, (l_rect.x-3, l_rect.y-1))
+            screen.blit(l_text, l_rect)
+
+        # J键（攻击）
+        if attack_icon:
+            x_j = WINDOW_WIDTH - icon_size*2 - gap - 20
+            if base_icon:
+                scaled_base = pygame.transform.smoothscale(base_icon, (base_size, base_size))
+                screen.blit(scaled_base, (x_j - base_offset, y_pos - base_offset))
+            scaled_icon = pygame.transform.smoothscale(attack_icon, (icon_size, icon_size))
+            screen.blit(scaled_icon, (x_j, y_pos))
+            remain, total = player.get_attack_cooldown_info()
+            if remain > 0 and total > 0:
+                ratio = remain / total
+                mask_surf = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
+                center = (icon_size // 2, icon_size // 2)
+                radius = icon_size // 2
+                start_angle = -90
+                end_angle = start_angle + int(360 * ratio)
+                points = [center]
+                steps = max(6, int(60 * ratio))
+                for i in range(steps+1):
+                    angle = math.radians(start_angle + (end_angle - start_angle) * i / steps)
+                    x = center[0] + radius * math.cos(angle)
+                    y = center[1] + radius * math.sin(angle)
+                    points.append((x, y))
+                pygame.draw.polygon(mask_surf, (0, 0, 0, 120), points)
+                screen.blit(mask_surf, (x_j, y_pos))
+            font = pygame.font.Font(None, 28)
+            j_text = font.render("J", True, (255, 180, 80))
+            j_rect = j_text.get_rect(bottomright=(x_j + icon_size - 4, y_pos + icon_size - 2))
+            j_bg = pygame.Surface((j_rect.width+6, j_rect.height+2), pygame.SRCALPHA)
+            j_bg.fill((0,0,0,120))
+            screen.blit(j_bg, (j_rect.x-3, j_rect.y-1))
+            screen.blit(j_text, j_rect)
+
+        # K键（冲刺）
+        if dash_icon:
+            x_k = WINDOW_WIDTH - icon_size - 20
+            if base_icon:
+                scaled_base = pygame.transform.smoothscale(base_icon, (base_size, base_size))
+                screen.blit(scaled_base, (x_k - base_offset, y_pos - base_offset))
+            scaled_icon = pygame.transform.smoothscale(dash_icon, (icon_size, icon_size))
+            screen.blit(scaled_icon, (x_k, y_pos))
+            remain, total = player.get_dash_cooldown_info()
+            if remain > 0 and total > 0:
+                ratio = remain / total
+                mask_surf = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
+                center = (icon_size // 2, icon_size // 2)
+                radius = icon_size // 2
+                start_angle = -90
+                end_angle = start_angle + int(360 * ratio)
+                points = [center]
+                steps = max(6, int(60 * ratio))
+                for i in range(steps+1):
+                    angle = math.radians(start_angle + (end_angle - start_angle) * i / steps)
+                    x = center[0] + radius * math.cos(angle)
+                    y = center[1] + radius * math.sin(angle)
+                    points.append((x, y))
+                pygame.draw.polygon(mask_surf, (0, 0, 0, 120), points)
+                screen.blit(mask_surf, (x_k, y_pos))
+            font = pygame.font.Font(None, 28)
+            k_text = font.render("K", True, (80, 180, 255))
+            k_rect = k_text.get_rect(bottomright=(x_k + icon_size - 4, y_pos + icon_size - 2))
+            k_bg = pygame.Surface((k_rect.width+6, k_rect.height+2), pygame.SRCALPHA)
+            k_bg.fill((0,0,0,120))
+            screen.blit(k_bg, (k_rect.x-3, k_rect.y-1))
+            screen.blit(k_text, k_rect)
+
         # 死亡动画播放完后，渐变放大显示gg图片
         if player.is_dead and gg_img:
             if hasattr(player, 'death_anim_finished') and player.death_anim_finished:
@@ -327,6 +487,41 @@ while running:
             if map_manager.save_collision_map():
                 game_state_manager.reset_auto_save()
                 print("已自动保存碰撞地图")
+
+        # 变身技能（I键），仅在变身状态下显示，且在所有技能按钮之后绘制
+        if hasattr(player, 'transformed') and player.transformed and skill_icon:
+            x_skill = WINDOW_WIDTH - icon_size*3 - gap*2 - 20
+            y_skill = y_pos - icon_size - gap
+            if base_icon:
+                scaled_base = pygame.transform.smoothscale(base_icon, (base_size, base_size))
+                screen.blit(scaled_base, (x_skill - base_offset, y_skill - base_offset))
+            scaled_icon = pygame.transform.smoothscale(skill_icon, (icon_size, icon_size))
+            screen.blit(scaled_icon, (x_skill, y_skill))
+            # 冷却扇形遮罩
+            remain, total = player.get_skill_cooldown_info()
+            if remain > 0 and total > 0:
+                ratio = remain / total
+                mask_surf = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
+                center = (icon_size // 2, icon_size // 2)
+                radius = icon_size // 2
+                start_angle = -90
+                end_angle = start_angle + int(360 * ratio)
+                points = [center]
+                steps = max(6, int(60 * ratio))
+                for i in range(steps+1):
+                    angle = math.radians(start_angle + (end_angle - start_angle) * i / steps)
+                    x = center[0] + radius * math.cos(angle)
+                    y = center[1] + radius * math.sin(angle)
+                    points.append((x, y))
+                pygame.draw.polygon(mask_surf, (0, 0, 0, 120), points)
+                screen.blit(mask_surf, (x_skill, y_skill))
+            font = pygame.font.Font(None, 28)
+            i_text = font.render("I", True, (255, 255, 120))
+            i_rect = i_text.get_rect(bottomright=(x_skill + icon_size - 4, y_skill + icon_size - 2))
+            i_bg = pygame.Surface((i_rect.width+6, i_rect.height+2), pygame.SRCALPHA)
+            i_bg.fill((0,0,0,120))
+            screen.blit(i_bg, (i_rect.x-3, i_rect.y-1))
+            screen.blit(i_text, i_rect)
     else:
         # 暂停状态显示
         screen.fill((20, 20, 20))

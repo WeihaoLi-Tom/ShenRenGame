@@ -3,6 +3,7 @@ import os
 import time
 import math
 import random
+from audio_manager import SoundCategory  # 新增导入
 
 class SkillBullet:
     def __init__(self, pos, direction, frames, enemy_manager, speed=1.8):
@@ -107,7 +108,7 @@ class Player:
         self.camera_y = 0  # 相机Y偏移
         # 攻击相关属性
         self.attack_range = self.tile_width  # 攻击范围
-        self.base_attack_damage = 100
+        self.base_attack_damage = 15
         self.attack_damage = self.base_attack_damage
         self.attack_rect = pygame.Rect(0, 0, 0, 0)  # 恢复attack_rect属性
         self.invincible = False
@@ -117,7 +118,7 @@ class Player:
         self.attack_mode = "stab"  # "stab"为突刺，"orbit"为环绕
         self.orbit_attack_anim = False
         self.orbit_attack_start_time = 0
-        self.orbit_attack_duration = 0.5  # 环绕动画时长（秒）
+        self.orbit_attack_duration = 0.5
         self.orbit_attack_angle = 0
         self.orbit_attack_hit = False  # 防止多次判定
         self.orbit_trail_length = 8  # 剑影数量
@@ -126,27 +127,30 @@ class Player:
         self.attack_sound.set_volume(0.5)
         self.attack_none_sound = pygame.mixer.Sound("assets/sound/hitnone.wav")
         self.attack_none_sound.set_volume(0.5)
+        self.firehit_sound = pygame.mixer.Sound("assets/sound/firehit.wav")
+        self.firehit_sound.set_volume(0.5)
         self.is_dashing = False
-        self.dash_cooldown = 1.0  # 冲刺冷却（秒）
+        self.dash_cooldown = 1.8  # 冲刺冷却（秒）
         self.dash_last_time = 0
-        self.dash_duration = 0.2  # 冲刺持续时间（秒）
+        self.dash_duration = 0.25  # 冲刺持续时间（秒）
+        self.dash_invincible_duration = 0.5  # 冲刺无敌时长（秒）
         self.dash_timer = 0
         self.base_dash_speed = self.move_speed * 1.8
         self.dash_speed = self.base_dash_speed
         self.dash_sound = pygame.mixer.Sound("assets/sound/dash.wav")
         self.dash_sound.set_volume(0.3)
+        self.firedash_sound = pygame.mixer.Sound("assets/sound/firedash.wav")
+        self.firedash_sound.set_volume(0.3)
         self.walk_sound = pygame.mixer.Sound("assets/sound/walk.wav")
         self.walk_sound.set_volume(0.3)
         self.walk_channel = None  # 用于控制走路音效的播放
         
         # 受伤音效
-        try:
-            self.hurt_sound = pygame.mixer.Sound("assets/sound/hurt_out.wav")
-            self.hurt_sound.set_volume(0.1)
-            print("受伤音效加载成功")
-        except Exception as e:
-            print(f"受伤音效初始化失败: {e}")
-            self.hurt_sound = None
+        self.hurt_sound = pygame.mixer.Sound("assets/sound/hurt_out.wav")
+        self.hurt_sound.set_volume(0.1)
+        self.scream_sound = pygame.mixer.Sound("assets/sound/Tom_Scream.wav")
+        self.scream_sound.set_volume(1)
+        self.hurt_sound_toggle = False
         
         # 死亡音效相关设置
         try:
@@ -188,6 +192,22 @@ class Player:
         self.bullet_frames = self._load_bullet_frames()
         self.skill_bullets = []
         self.enemy_manager = enemy_manager  # 新增
+        # 技能冷却相关
+        self.skill_cooldown = 5.0
+        self.skill_last_time = 0   # 上次释放技能的时间
+        # 变身冷却相关
+        self.transform_duration = 15.0  # 变身维持时间（秒）
+        self.transform_cooldown = 40.0  # 变身冷却时间（秒）
+        self.transform_last_time = 0    # 上次解除变身的时间
+        self.transform_start_time = 0   # 变身开始时间
+        self.transform_end_invincible = 0  # 变身解除后无敌结束时间
+        self.wuhu_sound = pygame.mixer.Sound("assets/sound/wuhu.wav")
+        self.wuhu_sound.set_volume(0.5)
+        self.fireskill_sound = pygame.mixer.Sound("assets/sound/fireskill.wav")
+        self.fireskill_sound.set_volume(0.5)
+        
+        # 添加audio_manager引用
+        self.audio_manager = None  # 将在main.py中设置
     
     def _load_frames(self, action):
         img_dir = "assets/characters/player_frames"
@@ -363,14 +383,19 @@ class Player:
             self.attack_last_time = current_time
             self.generate_attack_rect()  # 攻击时生成判定区域
             # 只要攻击动作触发，无论是否移动，都播放空挥音效
-            if hasattr(self, 'attack_none_sound') and self.attack_none_sound:
-                try:
-                    channel = pygame.mixer.Channel(7)
-                    channel.stop()
-                    channel.set_volume(0.5)
+            try:
+                channel = pygame.mixer.Channel(7)
+                channel.stop()
+                channel.set_volume(0.5)
+                if self.transformed:
+                    channel.play(self.firehit_sound)
+                else:
                     channel.play(self.attack_none_sound)
-                except Exception as e:
-                    print(f"播放空挥音效失败: {e}")
+            except Exception as e:
+                print(f"播放空挥音效失败: {e}")
+                if self.transformed:
+                    self.firehit_sound.play()
+                else:
                     self.attack_none_sound.play()
             return True
         return False
@@ -427,6 +452,10 @@ class Player:
                 self.transformed = not self.transformed
                 self.set_transform_stats()
                 self.frame_idx = 0
+                # 变身解除时记录冷却
+                if not self.transformed:
+                    self.transform_last_time = now
+                    self.transform_end_invincible = now + 1.0  # 解除变身后无敌1秒
             return
         if self.is_dead:
             self.action = "death"
@@ -453,6 +482,19 @@ class Player:
                 self.walk_channel.stop()
             return  # 死亡时不再处理其它状态
             
+        # 变身维持时间判定
+        if self.transformed and now - self.transform_start_time >= self.transform_duration:
+            self.transformed = False
+            self.set_transform_stats()
+            self.transform_last_time = now  # 解除变身时记录冷却
+            self.transform_end_invincible = now + 1.0  # 解除变身后无敌1秒
+        # 变身解除后无敌判定
+        if hasattr(self, 'transform_end_invincible') and self.transform_end_invincible > 0:
+            if now < self.transform_end_invincible:
+                self.invincible = True
+            else:
+                self.invincible = False
+                self.transform_end_invincible = 0
         # 冲刺逻辑
         if self.is_dashing:
             if self.walk_channel and self.walk_channel.get_busy():
@@ -474,29 +516,24 @@ class Player:
                 if not self.is_valid_position(self.rect.centerx, self.rect.centery):
                     self.rect.x, self.rect.y = old_x, old_y
                     break
-                # 只在非变身状态下记录拖尾
                 if not self.transformed:
                     self.dash_trail.append((self.rect.x, self.rect.y, time.time()))
-            # 只在非变身状态下更新拖尾
             if not self.transformed:
                 self.dash_trail = [t for t in self.dash_trail if now - t[2] < 0.2]
-                
-            # 变身状态下使用专用dash动画
             if self.transformed and "dash" in self.transform_frames:
                 self.action = "dash"
-                # 确保dash动画能完整播放
                 dash_frames = self.transform_frames.get("dash", [])
                 if dash_frames:
-                    # 计算基于当前冲刺经过时间的帧索引
                     dash_progress = (now - self.dash_timer) / self.dash_duration
                     self.frame_idx = min(int(dash_progress * len(dash_frames)), len(dash_frames) - 1)
             else:
                 self.action = "move"
-                
             self.is_moving = True
+            # 分离无敌和冲刺时长
+            if now - self.dash_timer >= self.dash_invincible_duration:
+                self.invincible = False
             if now - self.dash_timer >= self.dash_duration:
                 self.is_dashing = False
-                self.invincible = False
             return
         elif self.attacking:
             self.action = "attack"
@@ -578,17 +615,23 @@ class Player:
             self.current_health = max(0, self.current_health - damage)
             self.invincible = True
             self.invincible_timer = time.time()
-            # 播放受伤音效
-            if hasattr(self, 'hurt_sound') and self.hurt_sound:
-                try:
-                    channel = pygame.mixer.Channel(6)
-                    channel.stop()
-                    channel.set_volume(0.3)
+            # 播放受伤音效，轮流播放
+            try:
+                channel = pygame.mixer.Channel(6)
+                channel.stop()
+                channel.set_volume(0.3)
+                if self.hurt_sound_toggle:
+                    channel.play(self.scream_sound)
+                else:
                     channel.play(self.hurt_sound)
-                    print("播放受伤音效")
-                except Exception as e:
-                    print(f"播放受伤音效失败: {e}")
+                self.hurt_sound_toggle = not self.hurt_sound_toggle
+            except Exception as e:
+                print(f"播放受伤音效失败: {e}")
+                if self.hurt_sound_toggle:
+                    self.scream_sound.play()
+                else:
                     self.hurt_sound.play()
+                self.hurt_sound_toggle = not self.hurt_sound_toggle
             if self.current_health <= 0:
                 self.die()
             return True
@@ -650,7 +693,6 @@ class Player:
         # 技能动画优先播放
         if self.is_using_skill and self.skill_frames:
             frame = self.skill_frames[self.skill_idx]
-            # 根据朝向翻转帧
             if self.direction == "left":
                 frame = pygame.transform.flip(frame, True, False)
             frame_width, frame_height = frame.get_size()
@@ -661,7 +703,6 @@ class Player:
             return
         # 选择当前状态的帧集合
         frames_dict = self.transform_frames if self.transformed else self.frames
-        
         # dash拖尾特效 - 只在非变身状态下显示
         if not self.transformed:
             for tx, ty, t in self.dash_trail:
@@ -672,27 +713,23 @@ class Player:
                         action_key = f"attack_{self.direction}"
                 else:
                     action_key = f"move_{self.direction}"
-                
                 frames_list = frames_dict.get(action_key)
                 if not frames_list and self.direction == "left" and self.action != "attack":
                     frames_list = frames_dict.get(f"move_right")
                 if not frames_list:
                     frames_list = frames_dict.get("idle_down")
-                if frames_list:  # 确保帧列表存在
+                if frames_list:
                     frame = frames_list[self.frame_idx % len(frames_list)]
                     alpha = int(120 * (1 - (time.time() - t) / 0.2))
                     trail_img = frame.copy()
                     trail_img.set_alpha(alpha)
-                    # 关键：用和本体一样的偏移
                     draw_x = tx - (48 - self.rect.width) // 2
                     draw_y = ty - (48 - self.rect.height)
                     surface.blit(trail_img, (draw_x - camera_x, draw_y - camera_y))
-        
         # 死亡时只用death动画帧
         if self.is_dead:
             frames_list = frames_dict.get("death")
             flip = False
-        # 变身时使用专用dash动画
         elif self.action == "dash" and self.transformed and "dash" in frames_dict:
             frames_list = frames_dict.get("dash")
             flip = self.direction == "left"
@@ -711,7 +748,6 @@ class Player:
             elif not frames_list and self.direction == "left":
                 frames_list = frames_dict.get(f"{self.action}_right")
                 flip = True
-                
         if not frames_list:
             frames_list = frames_dict.get("idle_down")
         if not frames_list:
@@ -720,35 +756,25 @@ class Player:
         frame = frames_list[idx]
         if flip:
             frame = pygame.transform.flip(frame, True, False)
-
-        # 获取角色绘制偏移量
         frame_width, frame_height = frame.get_size()
-        
         if self.transformed:
-            # 水平居中于碰撞体
             draw_x = self.rect.centerx - frame_width // 2
-            # 角色底部与碰撞体底部对齐
-            offset = 20  # 你可以调整为10、15、25等，直到满意为止
+            offset = 20
             draw_y = self.rect.bottom - frame_height + offset
         else:
-            # 原始角色的位置计算
             draw_x = self.rect.x - (frame_width - self.rect.width) // 2
             draw_y = self.rect.y - (frame_height - self.rect.height)
-        
-        # 无敌时闪烁
+        # 保证变身解除后无敌1秒期间必定闪烁
         visible = True
-        if self.invincible and not self.is_dashing:
+        if (self.invincible or (hasattr(self, 'transform_end_invincible') and self.transform_end_invincible > time.time())) and not self.is_dashing:
             visible = int(time.time() * 10) % 2 == 0
         if visible:
             surface.blit(frame, (draw_x - camera_x, draw_y - camera_y))
-            
         # 只在show_debug_hitbox为True时绘制碰撞体和攻击范围
         if show_debug_hitbox:
-            # 绘制碰撞体
             collision_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
             pygame.draw.rect(collision_surface, (255, 0, 0, 128), collision_surface.get_rect())
             surface.blit(collision_surface, (self.rect.x - camera_x, self.rect.y - camera_y))
-            
             margin = 4
             for y in range(self.rect.top + margin, self.rect.bottom - margin, 4):
                 pygame.draw.circle(surface, (0, 255, 0), (self.rect.left + margin - camera_x, y - camera_y), 1)
@@ -832,15 +858,23 @@ class Player:
             self.dash_trail.clear()  # dash开始时清空拖尾
             self.dash_trail.append((self.rect.x, self.rect.y, time.time()))  # 记录起点
             # 无论是否移动，都播放冲刺音效
-            if hasattr(self, 'dash_sound') and self.dash_sound:
-                try:
+            try:
+                if self.transformed:
+                    channel = pygame.mixer.Channel(4)
+                    channel.stop()
+                    channel.set_volume(0.3)
+                    channel.play(self.firedash_sound)
+                else:
                     channel = pygame.mixer.Channel(4)
                     channel.stop()
                     channel.set_volume(0.3)
                     channel.play(self.dash_sound)
-                except Exception as e:
-                    print(f"播放冲刺音效失败: {e}")
-                    self.dash_sound.play() 
+            except Exception as e:
+                print(f"播放冲刺音效失败: {e}")
+                if self.transformed:
+                    self.firedash_sound.play()
+                else:
+                    self.dash_sound.play()
 
     def equip_new_sword(self, img_path):
         """
@@ -853,11 +887,20 @@ class Player:
             print("获得了耄耋之卵，按L键可以变身！")
     
     def toggle_transform(self):
-        """切换变身状态，先播放变身动画"""
+        now = time.time()
+        # 冷却判定
         if self.has_maoluan and not self.is_dead and not self.is_transforming:
+            if not self.transformed and now - self.transform_last_time < self.transform_cooldown:
+                return False
             self.is_transforming = True
             self.transform_anim_idx = 0
             self.transform_anim_timer = 0
+            if not self.transformed:
+                self.transform_start_time = now  # 记录变身开始时间
+                try:
+                    self.wuhu_sound.play()
+                except Exception as e:
+                    print(f"播放变身音效失败: {e}")
             return True
         return False 
 
@@ -870,12 +913,25 @@ class Player:
             self.dash_speed = self.base_dash_speed 
 
     def use_skill(self):
+        now = time.time()
         if self.transformed and not self.is_using_skill and not self.is_transforming and not self.is_dead:
+            # 技能冷却判定
+            if now - self.skill_last_time < self.skill_cooldown:
+                return False
             self.is_using_skill = True
             self.skill_idx = 0
             self.skill_timer = 0
             self.skill_bullet_fired = False
-            # 不再清空旧弹幕，让已有弹幕继续显示和更新
+            self.skill_last_time = now  # 记录释放时间
+            try:
+                if hasattr(self, 'audio_manager') and self.audio_manager:
+                    print("[DEBUG] 调用audio_manager播放技能音效")
+                    self.audio_manager.play_sound(SoundCategory.COMBAT, "fireskill")
+                else:
+                    print("[DEBUG] 直接播放self.fireskill_sound")
+                    self.fireskill_sound.play()
+            except Exception as e:
+                print(f"播放技能音效失败: {e}")
             return True
         return False 
    
@@ -887,3 +943,31 @@ class Player:
         """设置相机位置"""
         self.camera_x = x
         self.camera_y = y
+
+    def get_dash_cooldown_info(self):
+        """返回(剩余冷却时间, 总冷却时间)"""
+        now = time.time()
+        elapsed = now - self.dash_last_time
+        remain = max(0, self.dash_cooldown - elapsed)
+        return remain, self.dash_cooldown
+
+    def get_attack_cooldown_info(self):
+        """返回(剩余冷却时间, 总冷却时间)"""
+        now = time.time()
+        elapsed = now - self.attack_last_time
+        remain = max(0, self.attack_cooldown - elapsed)
+        return remain, self.attack_cooldown
+
+    def get_skill_cooldown_info(self):
+        """返回(剩余冷却时间, 总冷却时间)"""
+        now = time.time()
+        elapsed = now - self.skill_last_time
+        remain = max(0, self.skill_cooldown - elapsed)
+        return remain, self.skill_cooldown
+
+    def get_transform_cooldown_info(self):
+        """返回(剩余冷却时间, 总冷却时间)"""
+        now = time.time()
+        elapsed = now - self.transform_last_time
+        remain = max(0, self.transform_cooldown - elapsed)
+        return remain, self.transform_cooldown
