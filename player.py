@@ -4,8 +4,76 @@ import time
 import math
 import random
 
+class SkillBullet:
+    def __init__(self, pos, direction, frames, enemy_manager, speed=1.8):
+        self.frames = frames
+        self.frame_idx = 0
+        self.frame_timer = 0
+        self.frame_interval = 0.08
+        self.pos = list(pos)
+        self.direction = direction
+        self.speed = speed
+        self.alive = True
+        self.width = frames[0].get_width() if frames else 32
+        self.height = frames[0].get_height() if frames else 32
+        if direction == 'left':
+            self.frames = [pygame.transform.flip(frame, True, False) for frame in frames]
+        self.damage = 50
+        self.damage_interval = 0.2
+        self.last_damage_time = 0
+        self.hit_enemies = set()
+        self.rect = pygame.Rect(0, 0, self.width - 20, self.height - 40)
+        self.update_rect()
+        self.enemy_manager = enemy_manager
+
+    def update_rect(self):
+        self.rect.center = (int(self.pos[0]), int(self.pos[1]))
+
+    def update(self, enemies=None, camera_x=0, camera_y=0):
+        if self.direction == 'left':
+            self.pos[0] -= self.speed
+        elif self.direction == 'right':
+            self.pos[0] += self.speed
+        elif self.direction == 'up':
+            self.pos[1] -= self.speed
+        elif self.direction == 'down':
+            self.pos[1] += self.speed
+        self.update_rect()
+        self.frame_timer += 1/60
+        if self.frame_timer >= self.frame_interval:
+            self.frame_timer = 0
+            self.frame_idx += 1
+            if self.frame_idx >= len(self.frames):
+                self.alive = False
+        if enemies:
+            current_time = time.time()
+            if current_time - self.last_damage_time >= self.damage_interval:
+                self.last_damage_time = current_time
+                for enemy in enemies:
+                    if enemy not in self.hit_enemies and enemy.alive:
+                        enemy_rect = pygame.Rect(
+                            enemy.rect.x - 15,
+                            enemy.rect.y - 15,
+                            enemy.rect.width + 30,
+                            enemy.rect.height + 30
+                        )
+                        if self.rect.colliderect(enemy_rect):
+                            try:
+                                enemy.take_damage(self.damage)
+                                if not enemy.alive and hasattr(self.enemy_manager, 'on_enemy_dead'):
+                                    self.enemy_manager.on_enemy_dead(enemy.rect.center)
+                            except Exception as e:
+                                pass
+                            self.hit_enemies.add(enemy)
+
+    def draw(self, surface, camera_x, camera_y):
+        if self.frames:
+            frame = self.frames[self.frame_idx]
+            rect = frame.get_rect(center=(int(self.pos[0]) - camera_x, int(self.pos[1]) - camera_y - 10))
+            surface.blit(frame, rect)
+
 class Player:
-    def __init__(self, spawn_pos, tile_size, is_valid_position):
+    def __init__(self, spawn_pos, tile_size, is_valid_position, enemy_manager=None):
         self.tile_width, self.tile_height = tile_size
         # 更贴合人物的碰撞体
         sprite_w, sprite_h = 48, 48
@@ -34,9 +102,13 @@ class Player:
         self.frame_interval = 0.1  # 每帧间隔秒数
         self.frames = self._load_all_frames()
         self.position = list(spawn_pos)
+        self.enemies = []  # 存储敌人列表
+        self.camera_x = 0  # 相机X偏移
+        self.camera_y = 0  # 相机Y偏移
         # 攻击相关属性
         self.attack_range = self.tile_width  # 攻击范围
-        self.attack_damage = 100
+        self.base_attack_damage = 100
+        self.attack_damage = self.base_attack_damage
         self.attack_rect = pygame.Rect(0, 0, 0, 0)  # 恢复attack_rect属性
         self.invincible = False
         self.invincible_timer = 0
@@ -59,7 +131,8 @@ class Player:
         self.dash_last_time = 0
         self.dash_duration = 0.2  # 冲刺持续时间（秒）
         self.dash_timer = 0
-        self.dash_speed = self.move_speed * 1.8  # 冲刺速度
+        self.base_dash_speed = self.move_speed * 1.8
+        self.dash_speed = self.base_dash_speed
         self.dash_sound = pygame.mixer.Sound("assets/sound/dash.wav")
         self.dash_sound.set_volume(0.3)
         self.walk_sound = pygame.mixer.Sound("assets/sound/walk.wav")
@@ -105,6 +178,16 @@ class Player:
         self.transform_anim_idx = 0
         self.transform_anim_timer = 0
         self.transform_anim_interval = 0.08  # 变身动画帧间隔
+        # 技能动画相关
+        self.is_using_skill = False
+        self.skill_frames = self._load_skill_frames()
+        self.skill_idx = 0
+        self.skill_timer = 0
+        self.skill_interval = 0.08  # 技能动画帧间隔
+        # 技能弹幕相关
+        self.bullet_frames = self._load_bullet_frames()
+        self.skill_bullets = []
+        self.enemy_manager = enemy_manager  # 新增
     
     def _load_frames(self, action):
         img_dir = "assets/characters/player_frames"
@@ -200,9 +283,45 @@ class Player:
             print(f"加载变身动画目录失败 {dir_path}: {e}")
         return frames
 
+    def _load_skill_frames(self):
+        frames = []
+        dir_path = "assets/characters/transform/skill"
+        try:
+            if not os.path.exists(dir_path):
+                print(f"警告: 技能动画目录不存在 {dir_path}")
+                return frames
+            files = sorted([f for f in os.listdir(dir_path) if f.endswith('.png')])
+            for file in files:
+                fpath = os.path.join(dir_path, file)
+                try:
+                    frames.append(pygame.image.load(fpath).convert_alpha())
+                except Exception as e:
+                    print(f"加载技能动画帧失败 {fpath}: {e}")
+        except Exception as e:
+            print(f"加载技能动画目录失败 {dir_path}: {e}")
+        return frames
+
+    def _load_bullet_frames(self):
+        frames = []
+        dir_path = "assets/characters/transform/bullet"
+        try:
+            if not os.path.exists(dir_path):
+                print(f"警告: 法术弹幕动画目录不存在 {dir_path}")
+                return frames
+            files = sorted([f for f in os.listdir(dir_path) if f.endswith('.png')])
+            for file in files:
+                fpath = os.path.join(dir_path, file)
+                try:
+                    frames.append(pygame.image.load(fpath).convert_alpha())
+                except Exception as e:
+                    print(f"加载法术弹幕动画帧失败 {fpath}: {e}")
+        except Exception as e:
+            print(f"加载法术弹幕动画目录失败 {dir_path}: {e}")
+        return frames
+
     def move(self, keys, is_valid_position):
-        if self.is_dead:
-            return  # 死亡后不能移动
+        if self.is_dead or self.is_transforming or self.is_using_skill:
+            return  # 死亡、变身、技能期间不能移动
         if self.is_dashing:
             return  # 冲刺期间不能手动移动
         old_x, old_y = self.rect.topleft
@@ -306,6 +425,7 @@ class Player:
                 # 动画播放完毕，切换到变身状态
                 self.is_transforming = False
                 self.transformed = not self.transformed
+                self.set_transform_stats()
                 self.frame_idx = 0
             return
         if self.is_dead:
@@ -428,6 +548,30 @@ class Player:
         else:
             if self.walk_channel and self.walk_channel.get_busy():
                 self.walk_channel.stop()
+        # 技能动画流程
+        if self.is_using_skill:
+            self.action = "skill"
+            if not hasattr(self, 'skill_bullet_fired'):
+                self.skill_bullet_fired = False
+            if not self.skill_bullet_fired and self.skill_idx == 2:
+                direction = self.direction
+                bullet_pos = self.rect.center
+                self.skill_bullets.append(SkillBullet(bullet_pos, direction, self.bullet_frames, self.enemy_manager))
+                self.skill_bullet_fired = True
+            if self.skill_idx < len(self.skill_frames) - 1:
+                self.skill_timer += 1/60
+                if self.skill_timer >= self.skill_interval:
+                    self.skill_timer = 0
+                    self.skill_idx += 1
+            else:
+                self.is_using_skill = False
+                self.frame_idx = 0
+                self.skill_bullet_fired = False
+        
+        # 无论何种状态下都更新弹幕（移到外部）
+        for bullet in self.skill_bullets:
+            bullet.update(self.enemies, self.camera_x, self.camera_y)
+        self.skill_bullets = [b for b in self.skill_bullets if b.alive]
 
     def take_damage(self, damage):
         if not self.is_dead and not self.invincible:
@@ -490,9 +634,25 @@ class Player:
             self.frame_idx = 0
 
     def draw(self, surface, camera_x, camera_y, show_debug_hitbox=False):
+        # 先绘制弹幕，确保角色在弹幕上方
+        for bullet in self.skill_bullets:
+            bullet.draw(surface, camera_x, camera_y)
+
         # 变身动画优先播放
         if self.is_transforming and self.transform_anim_frames:
             frame = self.transform_anim_frames[self.transform_anim_idx]
+            frame_width, frame_height = frame.get_size()
+            draw_x = self.rect.centerx - frame_width // 2
+            offset = 20
+            draw_y = self.rect.bottom - frame_height + offset
+            surface.blit(frame, (draw_x - camera_x, draw_y - camera_y))
+            return
+        # 技能动画优先播放
+        if self.is_using_skill and self.skill_frames:
+            frame = self.skill_frames[self.skill_idx]
+            # 根据朝向翻转帧
+            if self.direction == "left":
+                frame = pygame.transform.flip(frame, True, False)
             frame_width, frame_height = frame.get_size()
             draw_x = self.rect.centerx - frame_width // 2
             offset = 20
@@ -700,3 +860,30 @@ class Player:
             self.transform_anim_timer = 0
             return True
         return False 
+
+    def set_transform_stats(self):
+        if self.transformed:
+            self.attack_damage = self.base_attack_damage *2   # 变身后攻击力
+            self.dash_speed = self.base_dash_speed *2  # 变身后冲刺更远
+        else:
+            self.attack_damage = self.base_attack_damage
+            self.dash_speed = self.base_dash_speed 
+
+    def use_skill(self):
+        if self.transformed and not self.is_using_skill and not self.is_transforming and not self.is_dead:
+            self.is_using_skill = True
+            self.skill_idx = 0
+            self.skill_timer = 0
+            self.skill_bullet_fired = False
+            # 不再清空旧弹幕，让已有弹幕继续显示和更新
+            return True
+        return False 
+   
+    def set_enemies(self, enemies):
+        """更新敌人列表"""
+        self.enemies = enemies
+
+    def set_camera_pos(self, x, y):
+        """设置相机位置"""
+        self.camera_x = x
+        self.camera_y = y

@@ -46,6 +46,7 @@ except Exception as e:
 
 # 初始化其他管理器
 enemy_manager = EnemyManager(map_manager, player)
+player.enemy_manager = enemy_manager
 effect_manager = EffectManager()
 game_state_manager = GameStateManager()
 ui_manager = UIManager(WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -133,6 +134,10 @@ while running:
                 elif event.key == pygame.K_l:
                     if player.toggle_transform():
                         game_state_manager.console_tip = "变身状态切换！"
+                        game_state_manager.console_tip_timer = time.time()
+                elif event.key == pygame.K_i:
+                    if player.use_skill():
+                        game_state_manager.console_tip = "技能释放！"
                         game_state_manager.console_tip_timer = time.time()
                 # 开发者控制台按键
                 elif game_state_manager.is_developer_mode():
@@ -228,6 +233,11 @@ while running:
         
         # 更新音频管理器
         audio_manager.update(delta_time)
+
+        # 更新玩家的敌人列表
+        player.set_enemies(enemy_manager.enemies)
+        if enemy_manager.boss and enemy_manager.boss.alive:
+            player.set_enemies(enemy_manager.enemies + [enemy_manager.boss])
 
         # 处理攻击按键
         if keys[pygame.K_j]:

@@ -47,7 +47,7 @@ class WeaponDrop:
         
     def draw_pickup_prompt(self, surface, camera_x, camera_y, player_pos, font):
         # 检查玩家是否靠近武器，显示拾取提示
-        pickup_distance = 50
+        pickup_distance = 100
         px, py = player_pos
         wx, wy = self.pos
         if ((px - wx) ** 2 + (py - wy) ** 2) ** 0.5 < pickup_distance:
