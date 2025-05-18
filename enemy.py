@@ -196,11 +196,11 @@ class Enemy:
                 pygame.draw.rect(surface, (0, 0, 255, 120), self.attack_rect.move(-camera_x, -camera_y), 2)
 
     def draw_health_bar(self, surface, x, y, width, height):
+        percent = self.current_health / self.max_health
+        health_color = (0, 255, 0) if percent > 0.5 else (255, 0, 0)
         bg_rect = pygame.Rect(x, y, width, height)
         pygame.draw.rect(surface, (64, 64, 64), bg_rect)
-        percent = self.current_health / self.max_health
         health_width = int(width * percent)
-        health_color = (0, 255, 0) if percent > 0.5 else (255, 0, 0)
         health_rect = pygame.Rect(x, y, health_width, height)
         pygame.draw.rect(surface, health_color, health_rect)
         pygame.draw.rect(surface, (200, 200, 200), bg_rect, 1)
@@ -226,8 +226,8 @@ class BossEnemy:
         self.rect.topleft = pos
         self.float_x = float(self.rect.x)
         self.float_y = float(self.rect.y)
-        self.max_health = 200
-        self.current_health = 200
+        self.max_health = 250
+        self.current_health = 250
         self.move_speed = 0.4  # 基础速度
         self.alive = True
         self.invincible = False
@@ -239,8 +239,8 @@ class BossEnemy:
         self.attack_cooldown = 1.5
         self.last_attack_time = 0
         # AI相关
-        self.vision_range = 150  # 感知范围
-        self.patrol_range = 80   # 巡逻半径
+        self.vision_range = 200  # 感知范围
+        self.patrol_range = 100   # 巡逻半径
         self.patrol_center = pos
         self.patrol_dir = 1
         self.patrol_axis = 'x'
@@ -263,7 +263,7 @@ class BossEnemy:
         # 加速能力相关
         self.dash_speed = 7.0
         self.dash_duration = 1.0  # 加速持续时间
-        self.dash_cooldown = 6.0  # 加速冷却时间
+        self.dash_cooldown = 5.0  # 加速冷却时间
         self.is_dashing = False
         self.dash_timer = 0
         self.last_dash_time = 0
@@ -593,10 +593,11 @@ class BossEnemy:
             if self.current_health <= 0:
                 self.current_health = 0
                 self.alive = False
-                # 记录死亡位置
-                self.death_position = self.rect.center
-                # 只有Boss才记录位置
-                print(f"Boss死亡，位置：{self.death_position}")
+                self.death_position = (self.rect.centerx, self.rect.centery)
+                # 无论被什么方式击杀，都掉落装备并停止BGM
+                if hasattr(self, 'enemy_manager'):
+                    self.enemy_manager.drop_equipment(self.death_position)
+                    self.enemy_manager.stop_bgm()
 
     def try_attack(self, player):
         if not self.alive:
@@ -730,8 +731,10 @@ class BossEnemy:
             visible = int(time.time() * 10) % 2 == 0
         if visible:
             surface.blit(self.image, (x, y))
-        # 绘制血条
-        self.draw_health_bar(surface, x, y - 15, self.rect.width, 8)
+        # Boss血条加长并居中
+        bar_width = self.rect.width * 2
+        bar_x = x + (self.rect.width - bar_width) // 2
+        self.draw_health_bar(surface, bar_x, y - 15, bar_width, 8)
         # 绘制弹幕（越飞越大）
         for bullet in self.ha_bullets:
             bx = bullet['x'] - camera_x - bullet['img'].get_width()//2
@@ -752,8 +755,11 @@ class BossEnemy:
                     alpha = int(255 * (1 - (elapsed - (duration - fade_duration)) / fade_duration))
                 else:
                     alpha = 255
-                small_font = pygame.font.Font(font.get_name(), 10) if hasattr(font, 'get_name') else font
-                tip_text = small_font.render("飞升喵星！", True, (255, 255, 0))
+                try:
+                    font = pygame.font.Font("assets/fonts/chinese.ttf", 20)
+                except Exception:
+                    font = pygame.font.SysFont("SimHei", 10)  # 兼容Windows黑体
+                tip_text = font.render("飞升喵星！", True, (255, 255, 0))
                 scale = 0.5
                 tip_text = pygame.transform.smoothscale(tip_text, (int(tip_text.get_width()*scale), int(tip_text.get_height()*scale)))
                 tip_text.set_alpha(alpha)
@@ -767,7 +773,7 @@ class BossEnemy:
                 pygame.draw.rect(bg_surf, (0, 0, 0, int(alpha*0.6)), (0, 0, bg_w, bg_h), border_radius=bg_h//2)
                 # ---- 美化：伪描边 ----
                 for dx, dy in [(-1,0),(1,0),(0,-1),(0,1)]:
-                    outline = small_font.render("飞升喵星！", True, (0,0,0))
+                    outline = font.render("飞升喵星！", True, (0,0,0))
                     outline = pygame.transform.smoothscale(outline, (int(outline.get_width()*scale), int(outline.get_height()*scale)))
                     outline.set_alpha(alpha)
                     bg_surf.blit(outline, (padding//2+dx, padding//2+dy))
@@ -790,21 +796,41 @@ class BossEnemy:
                 pygame.draw.rect(surface, (0, 0, 255, 120), self.attack_rect.move(-camera_x, -camera_y), 2)
 
     def draw_health_bar(self, surface, x, y, width, height):
-        bg_rect = pygame.Rect(x, y, width, height)
-        pygame.draw.rect(surface, (64, 64, 64), bg_rect)
         percent = self.current_health / self.max_health
+        # 绿色->黄色->红色渐变
+        if percent > 0.5:
+            # 绿到黄
+            blend = (percent - 0.5) / 0.5
+            r = int(255 * (1 - blend))
+            g = 255
+            b = 0
+        else:
+            # 黄到红
+            blend = percent / 0.5
+            r = 255
+            g = int(255 * blend)
+            b = 0
+        health_color = (r, g, b)
+        bg_rect = pygame.Rect(x, y, width, height)
+        pygame.draw.rect(surface, (64, 64, 64), bg_rect, border_radius=height//2)
         health_width = int(width * percent)
-        health_color = (255, 50, 50) if percent > 0.3 else (200, 0, 0)
         health_rect = pygame.Rect(x, y, health_width, height)
-        pygame.draw.rect(surface, health_color, health_rect)
-        pygame.draw.rect(surface, (200, 200, 200), bg_rect, 1)
+        pygame.draw.rect(surface, health_color, health_rect, border_radius=height//2)
+        pygame.draw.rect(surface, (220, 220, 220), bg_rect, 2, border_radius=height//2)
+        try:
+            font = pygame.font.Font("assets/fonts/chinese.ttf", height+3)
+        except Exception:
+            font = pygame.font.SysFont("SimHei", height+3)  # 兼容Windows黑体
+        text_surf = font.render("圆头耄耋", True, (255, 215, 0))
+        text_rect = text_surf.get_rect(center=(x+width//2, y-10))
+        surface.blit(text_surf, text_rect)
 
     def trigger_dash(self):
         """触发加速能力"""
         self.is_dashing = True
         self.dash_timer = time.time()
         self.last_dash_time = time.time()
-        self.move_speed = 3.0  # 提升速度
+        self.move_speed = 3.5  # 提升速度
         # 切换到加速状态图片
         self.image = self.attack_image
         # 生成初始粒子效果

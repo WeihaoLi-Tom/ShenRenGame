@@ -1,5 +1,6 @@
 import random
 from enemy import Enemy, BossEnemy
+from skeleton_enemy import SkeletonEnemy
 import pygame
 from weapon_drop import WeaponDrop
 
@@ -10,15 +11,15 @@ class EnemyManager:
         self.enemies = []
         self.boss = None
         self.spawn_timer = 0
-        self.spawn_interval = 7.0  # 每10秒生成一个新敌人
-        self.max_enemies = 5  # 场上最多同时存在5个敌人
+        self.spawn_interval = 3.0  # 每7秒生成一个新敌人
+        self.max_enemies = 8  # 场上最多同时存在5个敌人
         self.killed_count = 0
-        self.boss_spawn_threshold = 2  # 杀死5个小敌人后生成Boss
+        self.boss_spawn_threshold = 2  # 杀死2个敌人后生成Boss
         self.boss_spawned = False
         self.on_boss_spawn = None  # Boss出现回调
         self.weapon_drop = None  # 添加武器掉落物属性
         
-        # 初始生成2只幽灵
+        # 初始生成2只骷髅
         self.spawn_initial_enemies()
     
     def spawn_initial_enemies(self):
@@ -26,7 +27,7 @@ class EnemyManager:
             self.spawn_enemy()
     
     def spawn_enemy(self):
-        """生成一个新的普通敌人"""
+        """生成一个新的敌人"""
         # 如果Boss存在，不生成新敌人
         if self.boss and self.boss.alive:
             return
@@ -34,8 +35,15 @@ class EnemyManager:
         if len(self.enemies) < self.max_enemies:
             pos = self.find_safe_enemy_spawn(100)
             if pos is not None:
-                self.enemies.append(Enemy(pos))
-                print(f"生成了一个新的幽灵敌人，当前敌人数: {len(self.enemies)}")
+                # 随机生成骷髅或幽灵
+                if random.random() < 0.7:
+                    enemy = SkeletonEnemy(pos)
+                else:
+                    enemy = Enemy(pos)
+                # 调高巡逻范围
+                enemy.patrol_range = 180  # 或更大，根据地图大小调整
+                self.enemies.append(enemy)
+                print(f"生成了一个新的{'骷髅' if isinstance(enemy, SkeletonEnemy) else '幽灵'}敌人，当前敌人数: {len(self.enemies)}")
             else:
                 print("未找到安全的敌人出生点，本次不生成敌人。")
     
@@ -46,6 +54,8 @@ class EnemyManager:
             if pos is not None:
                 self.boss = BossEnemy(pos, size=(32, 32))
                 self.boss.set_map_manager(self.map_manager)
+                self.boss.patrol_range = 300  # Boss巡逻范围更大
+                self.boss.enemy_manager = self  # 关键：让Boss能访问manager
                 self.boss_spawned = True
                 # 播放BGM
                 try:
@@ -61,23 +71,20 @@ class EnemyManager:
                 print("未找到安全的Boss出生点，Boss未生成。")
     
     def find_safe_enemy_spawn(self, min_distance_from_player=64):
-        """查找安全的敌人出生点"""
-        # 收集所有可行走区域
+        """查找安全的敌人出生点，不能在墙壁里"""
         valid_positions = []
         px, py = self.player.position
         for y in range(1, self.map_manager.height - 1):
             for x in range(1, self.map_manager.width - 1):
+                # 不能在墙壁里
                 if not self.map_manager.collision_map[y][x]:
                     pos_x = x * self.map_manager.tile_width
                     pos_y = y * self.map_manager.tile_height
                     # 确保离玩家有一定距离
                     if ((pos_x - px) ** 2 + (pos_y - py) ** 2) ** 0.5 > min_distance_from_player:
                         valid_positions.append((pos_x, pos_y))
-        
-        # 随机选择一个位置
         if valid_positions:
             return random.choice(valid_positions)
-        # 如果找不到，返回None
         return None
     
     def update(self, is_valid_position, delta_time):
@@ -98,7 +105,9 @@ class EnemyManager:
                 self.enemies.remove(enemy)
                 self.killed_count += 1
                 print(f"击败了一个敌人！已击败: {self.killed_count}/{self.boss_spawn_threshold}")
-                
+                # 玩家击杀回血
+                if hasattr(self.player, 'heal'):
+                    self.player.heal(10)
                 # 检查是否达到生成Boss的条件
                 if self.killed_count >= self.boss_spawn_threshold and not self.boss_spawned:
                     self.spawn_boss()
@@ -151,4 +160,16 @@ class EnemyManager:
         
         # 绘制Boss (如果存在)
         if self.boss and self.boss.alive:
-            self.boss.draw(surface, camera_x, camera_y, font, show_debug_hitbox) 
+            self.boss.draw(surface, camera_x, camera_y, font, show_debug_hitbox)
+
+    def drop_equipment(self, pos):
+        try:
+            self.weapon_drop = WeaponDrop(pos, "assets/weapon/maoluan.png")
+        except Exception as e:
+            print(f"掉落装备失败: {e}")
+
+    def stop_bgm(self):
+        try:
+            pygame.mixer.music.fadeout(2000)
+        except Exception as e:
+            print(f"停止BGM失败: {e}") 

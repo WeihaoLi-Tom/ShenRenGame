@@ -108,7 +108,7 @@ class Player:
         self.camera_y = 0  # 相机Y偏移
         # 攻击相关属性
         self.attack_range = self.tile_width  # 攻击范围
-        self.base_attack_damage = 15
+        self.base_attack_damage = 100
         self.attack_damage = self.base_attack_damage
         self.attack_rect = pygame.Rect(0, 0, 0, 0)  # 恢复attack_rect属性
         self.invincible = False
