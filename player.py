@@ -5,7 +5,7 @@ import math
 import random
 
 class Player:
-    def __init__(self, spawn_pos, tile_size):
+    def __init__(self, spawn_pos, tile_size, is_valid_position):
         self.tile_width, self.tile_height = tile_size
         # 更贴合人物的碰撞体
         sprite_w, sprite_h = 48, 48
@@ -92,6 +92,8 @@ class Player:
             
         self.death_sound_played = False
         self.death_channel = None  # 专用于死亡音效的声道
+        self.dash_trail = []  # 拖尾记录（x, y, t）
+        self.is_valid_position = is_valid_position  # 保存碰撞检测函数
     
     def _load_frames(self, action):
         img_dir = "assets/characters/player_frames"
@@ -131,38 +133,32 @@ class Player:
             return  # 冲刺期间不能手动移动
         old_x, old_y = self.rect.topleft
         self.is_moving = False
-        
         # 处理水平移动
-        if keys[pygame.K_LEFT]:
+        if keys[pygame.K_a]:
             self.rect.x -= self.move_speed
             self.facing_left = True
-            self.direction = "left"  # 向左移动时使用left方向
+            self.direction = "left"
             self.is_moving = True
-            # 检查左边缘的多个点
             if not all(is_valid_position(self.rect.left, y) for y in range(self.rect.top + 4, self.rect.bottom - 4, 4)):
                 self.rect.x = old_x
-        if keys[pygame.K_RIGHT]:
+        if keys[pygame.K_d]:
             self.rect.x += self.move_speed
             self.facing_left = False
-            self.direction = "right"  # 向右移动时使用right方向
+            self.direction = "right"
             self.is_moving = True
-            # 检查右边缘的多个点
             if not all(is_valid_position(self.rect.right - 1, y) for y in range(self.rect.top + 4, self.rect.bottom - 4, 4)):
                 self.rect.x = old_x
-                
         # 处理垂直移动
-        if keys[pygame.K_UP]:
+        if keys[pygame.K_w]:
             self.rect.y -= self.move_speed
-            self.direction = "up"  # 向上移动时使用up方向
+            self.direction = "up"
             self.is_moving = True
-            # 检查上边缘的多个点
             if not all(is_valid_position(x, self.rect.top) for x in range(self.rect.left + 4, self.rect.right - 4, 4)):
                 self.rect.y = old_y
-        if keys[pygame.K_DOWN]:
+        if keys[pygame.K_s]:
             self.rect.y += self.move_speed
-            self.direction = "down"  # 向下移动时使用down方向
+            self.direction = "down"
             self.is_moving = True
-            # 检查下边缘的多个点
             if not all(is_valid_position(x, self.rect.bottom - 1) for x in range(self.rect.left + 4, self.rect.right - 4, 4)):
                 self.rect.y = old_y
 
@@ -249,19 +245,28 @@ class Player:
             return  # 死亡时不再处理其它状态
         # 冲刺逻辑
         if self.is_dashing:
-            # 冲刺时也停止走路音效
             if self.walk_channel and self.walk_channel.get_busy():
                 self.walk_channel.stop()
             speed = self.dash_speed
+            dx, dy = 0, 0
             if self.direction == "left":
-                self.rect.x -= speed
+                dx = -1
             elif self.direction == "right":
-                self.rect.x += speed
+                dx = 1
             elif self.direction == "up":
-                self.rect.y -= speed
+                dy = -1
             elif self.direction == "down":
-                self.rect.y += speed
-            self.action = "move"  # 用move动画代替
+                dy = 1
+            for _ in range(int(speed)):
+                old_x, old_y = self.rect.x, self.rect.y
+                self.rect.x += dx
+                self.rect.y += dy
+                if not self.is_valid_position(self.rect.centerx, self.rect.centery):
+                    self.rect.x, self.rect.y = old_x, old_y
+                    break
+                self.dash_trail.append((self.rect.x, self.rect.y, time.time()))
+            self.dash_trail = [t for t in self.dash_trail if now - t[2] < 0.2]
+            self.action = "move"
             self.is_moving = True
             if now - self.dash_timer >= self.dash_duration:
                 self.is_dashing = False
@@ -373,6 +378,28 @@ class Player:
             self.frame_idx = 0
 
     def draw(self, surface, camera_x, camera_y, show_debug_hitbox=False):
+        # dash拖尾特效
+        for tx, ty, t in self.dash_trail:
+            if self.action == "attack":
+                if self.direction == "left":
+                    action_key = "attack_right"
+                else:
+                    action_key = f"attack_{self.direction}"
+            else:
+                action_key = f"move_{self.direction}"
+            frames_list = self.frames.get(action_key)
+            if not frames_list and self.direction == "left" and self.action != "attack":
+                frames_list = self.frames.get(f"move_right")
+            if not frames_list:
+                frames_list = self.frames.get("idle_down")
+            frame = frames_list[self.frame_idx % len(frames_list)]
+            alpha = int(120 * (1 - (time.time() - t) / 0.2))
+            trail_img = frame.copy()
+            trail_img.set_alpha(alpha)
+            # 关键：用和本体一样的偏移
+            draw_x = tx - (48 - self.rect.width) // 2
+            draw_y = ty - (48 - self.rect.height)
+            surface.blit(trail_img, (draw_x - camera_x, draw_y - camera_y))
         # 死亡时只用death动画帧
         if self.action == "death":
             frames_list = self.frames.get("death")
@@ -404,7 +431,7 @@ class Player:
         draw_y = self.rect.y - (48 - self.rect.height)
         # 新增：无敌时闪烁
         visible = True
-        if self.invincible:
+        if self.invincible and not self.is_dashing:
             visible = int(time.time() * 10) % 2 == 0
         if visible:
             surface.blit(frame, (draw_x - camera_x, draw_y - camera_y))
@@ -493,6 +520,8 @@ class Player:
             self.dash_timer = now
             self.dash_last_time = now
             self.invincible = True  # 冲刺期间无敌
+            self.dash_trail.clear()  # dash开始时清空拖尾
+            self.dash_trail.append((self.rect.x, self.rect.y, time.time()))  # 记录起点
             # 无论是否移动，都播放冲刺音效
             if hasattr(self, 'dash_sound') and self.dash_sound:
                 try:

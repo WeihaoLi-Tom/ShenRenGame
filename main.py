@@ -39,7 +39,7 @@ zoomed_height = int(WINDOW_HEIGHT / ZOOM_LEVEL)
 # 初始化玩家
 try:
     spawn_pos = map_manager.find_safe_spawn()
-    player = Player(spawn_pos, (map_manager.tile_width, map_manager.tile_height))
+    player = Player(spawn_pos, (map_manager.tile_width, map_manager.tile_height), map_manager.is_valid_position)
 except Exception as e:
     print(f"初始化玩家时出错: {e}")
     sys.exit(1)
@@ -122,7 +122,7 @@ while running:
                     game_state_manager.toggle_debug_display()
                 elif event.key == pygame.K_c:
                     game_state_manager.toggle_collision_display()
-                elif event.key == pygame.K_LSHIFT:
+                elif event.key == pygame.K_k:
                     player.dash()
                 # 开发者控制台按键
                 elif game_state_manager.is_developer_mode():
@@ -220,16 +220,14 @@ while running:
         audio_manager.update(delta_time)
 
         # 处理攻击按键
-        if keys[pygame.K_SPACE]:
+        if keys[pygame.K_j]:
             if player.attack():
                 print("Player attacked!")
                 if player.attack_mode == "orbit":
-                    # 环绕攻击模式下，每帧都检查攻击判定
                     attack_rect = player.get_orbit_attack_rect()
-                    if attack_rect.width > 0:  # 只在有判定区域时检查
+                    if attack_rect.width > 0:
                         enemy_manager.check_attacks(attack_rect)
                 else:
-                    # 突刺攻击模式
                     attack_rect = player.attack_rect
                     enemy_manager.check_attacks(attack_rect)
                 
