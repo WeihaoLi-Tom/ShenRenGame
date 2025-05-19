@@ -14,7 +14,7 @@ class EnemyManager:
         self.spawn_interval = 3.0  # 每7秒生成一个新敌人
         self.max_enemies = 8  # 场上最多同时存在5个敌人
         self.killed_count = 0
-        self.boss_spawn_threshold = 2  # 杀死2个敌人后生成Boss
+        self.boss_spawn_threshold = 5  # 杀死2个敌人后生成Boss
         self.boss_spawned = False
         self.on_boss_spawn = None  # Boss出现回调
         self.weapon_drop = None  # 添加武器掉落物属性

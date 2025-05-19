@@ -83,8 +83,8 @@ class Player:
         rect_y = spawn_pos[1] + (sprite_h - rect_h)
         self.rect = pygame.Rect(rect_x, rect_y, rect_w, rect_h)
         self.move_speed = 1.8
-        self.max_health = 1000
-        self.current_health = 1000
+        self.max_health = 200
+        self.current_health = 200
         self.is_dead = False
         self.attacking = False
         self.attack_timer = 0
