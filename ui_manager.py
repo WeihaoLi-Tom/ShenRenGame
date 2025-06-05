@@ -5,9 +5,10 @@ import os
 from game_state import GameStateManager
 
 class UIManager:
-    def __init__(self, window_width, window_height):
+    def __init__(self, window_width, window_height, game_state_manager=None):
         self.window_width = window_width
         self.window_height = window_height
+        self.game_state_manager = game_state_manager
         self.fps = 0
         self.fps_timer = time.time()
         self.fps_counter = 0
@@ -57,8 +58,9 @@ class UIManager:
             surface.blit(text_surface, (10, 10 + i * 25))
         
         # 绘制开发者控制台提示
-        if game_state_manager.console_tip and time.time() - game_state_manager.console_tip_timer < 2.0:
-            tip_text = self.font.render(game_state_manager.console_tip, True, (0, 255, 0))
+        if self.game_state_manager and self.game_state_manager.console_tip and \
+           time.time() - self.game_state_manager.console_tip_timer < 2.0:
+            tip_text = self.font.render(self.game_state_manager.console_tip, True, (0, 255, 0))
             tip_rect = tip_text.get_rect(center=(self.window_width//2, 50))
             # 绘制半透明背景
             bg_surf = pygame.Surface((tip_rect.width + 20, tip_rect.height + 10), pygame.SRCALPHA)

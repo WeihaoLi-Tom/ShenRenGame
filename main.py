@@ -59,7 +59,7 @@ enemy_manager = EnemyManager(map_manager, player)
 player.enemy_manager = enemy_manager
 effect_manager = EffectManager()
 game_state_manager = GameStateManager()
-ui_manager = UIManager(WINDOW_WIDTH, WINDOW_HEIGHT)
+ui_manager = UIManager(WINDOW_WIDTH, WINDOW_HEIGHT, game_state_manager)
 audio_manager = AudioManager()
 player.audio_manager = audio_manager  # 设置player的audio_manager引用
 
